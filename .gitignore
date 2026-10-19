@@ -1,0 +1,13 @@
+reference/
+tmp/
+output/
+node_modules/
+__pycache__/
+*.pyc
+.env
+.env.*
+.codex/
+.agents/
+.aws/
+*.zip
+.DS_Store
