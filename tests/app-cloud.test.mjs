@@ -35,7 +35,7 @@ function browserLocks() {
   return {held,async request(name,_options,callback){if(held.has(name))return callback(null);held.add(name);try{return await callback({name});}finally{held.delete(name);}}};
 }
 
-function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,deferredSession=false,remote=new Map(),locks=browserLocks()}={}) {
+function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,deferredSession=false,deferredLogout=false,remote=new Map(),locks=browserLocks()}={}) {
   const elements=new Map([...html.matchAll(/\bid="([^"]+)"/g)].map(match=>[`#${match[1]}`,new Element()]));
   const documentListeners=new Map(),windowListeners=new Map();
   const storage=new Map([[KEY,JSON.stringify({version:1,activeId:guest.id,characters:[guest]})]]);
@@ -48,12 +48,12 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
     createElement:()=>{const element=new Element();element.ownerDocument=document;return element;},createTextNode:text=>({textContent:text}),
     addEventListener:(event,listener)=>documentListeners.set(event,listener)};
   for(const element of elements.values())element.ownerDocument=document;
-  let nextTimer=0,authListener,resolveSession,authUser=initialUser,inCallback=false;
+  let nextTimer=0,authListener,resolveSession,resolveLogout,authUser=initialUser,inCallback=false;
   const timers=new Map(),intervals=new Map(),calls=[],events=[];
   const auth={
     onAuthStateChange(callback){authListener=callback;return{data:{subscription:{unsubscribe(){authListener=null;}}}};},
     getSession(){return deferredSession?new Promise(resolve=>{resolveSession=resolve;}):Promise.resolve({data:{session:session(initialUser)},error:null});},
-    async signOut(){assert.equal(inCallback,false,'SDK auth calls must happen outside its callback lock');emit(null);return{error:null};},
+    async signOut(){assert.equal(inCallback,false,'SDK auth calls must happen outside its callback lock');emit(null);if(deferredLogout)await new Promise(resolve=>{resolveLogout=resolve;});return{error:null};},
     async signInWithOAuth(options){assert.equal(inCallback,false);calls.push({type:'login',options});return{error:null};}
   };
   function emit(id){authUser=id;inCallback=true;try{authListener(id?'SIGNED_IN':'SIGNED_OUT',session(id));}finally{inCallback=false;}}
@@ -76,8 +76,21 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
   const runTimers=async(delay=0)=>{for(const[id,timer]of[...timers])if(timer.delay===delay){timers.delete(id);timer.fn();}await flush();};
   function edit(path,value){const target={dataset:{field:path},value,type:'text',matches:selector=>selector==='[data-field]'};documentListeners.get('input')({target});}
   return{app,storage,localStorage,writes,elements,auth,adapter,calls,events,emit,runTimers,edit,remote,locks,windowListeners,document,clickAction:(action,extra={})=>documentListeners.get('click')({target:{closest:()=>({dataset:{action,...extra}})}}),setQuotaFailure:value=>{quotaFailure=value;},
-    resolveSession:id=>resolveSession({data:{session:session(id)},error:null})};
+    resolveSession:id=>resolveSession({data:{session:session(id)},error:null}),resolveLogout:()=>resolveLogout()};
 }
+
+test('a late signout response cannot replace a newer connected account',async()=>{
+  const c=model.createCharacter('Ficha da conta B');
+  const f=fixture({initialUser:'account-a',deferredLogout:true,remote:new Map([['account-b',[{id:c.id,data:c,revision:1,deleted_at:null}]]])});
+  await flush();
+  const leaving=f.app.logoutCloud();
+  f.emit('account-b');await f.runTimers();
+  assert.equal(f.app.getState().cloudUser.id,'account-b');
+  f.resolveLogout();await leaving;
+  assert.equal(f.app.getState().cloudUser.id,'account-b');
+  assert.equal(f.app.getState().records[0].id,c.id);
+  assert.equal(f.app.getState().cloudReady,true);
+});
 
 test('a stale initial auth session cannot replace a newer sign-in, and SDK callbacks defer work',async()=>{
   const f=fixture({deferredSession:true});

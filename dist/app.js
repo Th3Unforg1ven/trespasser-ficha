@@ -267,14 +267,15 @@ async function loginCloud() {
 }
 async function logoutCloud() {
   if (!cloudConnection || authBusy || cloudEditError || hasUncachedEdits()) return;
+  const signingOutId=cloudUser?.id||null;
   authBusy=true;accountProblem='';updateAccountControls(true);
   try {
     const {error}=await cloudConnection.auth.signOut({scope:'local'});
     if(error)throw error;
-    await attachSession(null);
-    toast('Você saiu da conta neste dispositivo. As fichas online continuam na sua conta.');
-  } catch { accountProblem='Não foi possível sair agora. Tente novamente.'; }
-  finally {authBusy=false;updateAccountControls(true);}
+    if((cloudUser?.id||null)===signingOutId)await attachSession(null);
+    if(!cloudUser)toast('Você saiu da conta neste dispositivo. As fichas online continuam na sua conta.');
+  } catch { if((cloudUser?.id||null)===signingOutId)accountProblem='Não foi possível sair agora. Tente novamente.'; }
+  finally {if(!cloudUser||cloudUser.id===signingOutId){authBusy=false;updateAccountControls(true);}}
 }
 async function migrateLocalCharacters() {
   if (!cloudReady || !cloudUser || authBusy || cloudEditError || hasUncachedEdits()) return;
