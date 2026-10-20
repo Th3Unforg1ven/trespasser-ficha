@@ -75,10 +75,10 @@ test('one ready login click reaches the existing delegated action; signed-in use
   assert.equal(f.nodes.get('#account-button').clicks,0);
   assert.equal(f.document.body.dataset.view,'workspace');
   f.windowEvents.get('trespasser:account')({detail:{signedIn:true,ready:true}});
-  assert.equal(f.nodes.get('#landing-login').textContent,'Minha conta');
+  assert.equal(f.nodes.get('#landing-login').textContent,'Configurações');
   assert.equal(f.nodes.get('#landing-guest').hidden,true);
   f.nodes.get('#landing-login').click();
-  assert.deepEqual(f.delegatedActions,['cloud-login','cloud-account']);
+  assert.deepEqual(f.delegatedActions,['cloud-login','settings']);
   f.windowEvents.get('trespasser:account')({detail:{signedIn:false,ready:true}});
   assert.equal(f.nodes.get('#landing-login').textContent,'Entrar com Google');
   assert.equal(f.nodes.get('#landing-guest').hidden,false);

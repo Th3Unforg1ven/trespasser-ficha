@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node server.mjs",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check dist/app.js && node --check dist/model.js && node --check dist/print.js && node --check dist/export-data.js && node --check dist/pdf-export.js && node --check dist/export-bundle.js && node --check dist/cloud-client.js && node --check dist/cloud-config.js && node --check dist/cloud-sync.js && node --check dist/cloud-ui-state.js && node --check dist/sync-state.js && node --check dist/account-lock.js && node --check dist/landing.js && node --check dist/icons.js && node --check scripts/check-sdk-http.mjs",
+    "check": "node --check dist/app.js && node --check dist/model.js && node --check dist/print.js && node --check dist/export-data.js && node --check dist/pdf-export.js && node --check dist/export-bundle.js && node --check dist/cloud-client.js && node --check dist/cloud-config.js && node --check dist/cloud-sync.js && node --check dist/cloud-ui-state.js && node --check dist/sync-state.js && node --check dist/account-lock.js && node --check dist/landing.js && node --check dist/icons.js && node --check dist/preferences.js && node --check scripts/check-sdk-http.mjs",
     "vendor:supabase": "node scripts/vendor-supabase.mjs"
   },
   "dependencies": {

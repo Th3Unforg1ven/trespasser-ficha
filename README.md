@@ -8,6 +8,8 @@ Ficha editável não oficial para Trespasser v2.1.3, em português com os termos
 
 Na tela inicial, escolha **Entrar com Google** para salvar suas fichas privadas na conta. Entre com o mesmo Google no celular e no computador para continuar a edição. **Abrir minhas fichas** leva ao registro; **Início** volta à tela com as ilustrações. Sem entrar, os personagens são salvos apenas neste navegador.
 
+O menu **Configurações**, acessível pela engrenagem da tela inicial ou por **Ajustes** na ficha, reúne aparência e conta, incluindo **Sair deste dispositivo**. Escolha **Claro**, **Noturno** ou **Automático**; a preferência acompanha este navegador e é independente dos personagens. Automático segue a aparência do dispositivo. O modo noturno conserva o contraste e as molduras da ficha, enquanto impressão e PDF continuam em papel claro. O salvamento online é automático, sem botão de sincronização manual.
+
 Depois de entrar, use **Salvar minhas fichas locais na conta** para enviar personagens que já estavam neste endereço. A cópia local é mantida. Fichas de outro endereço, como localhost, podem ser importadas por JSON uma vez.
 
 **Exportar** prepara um ZIP com PDF preenchível e JSON do mesmo personagem, com opções para baixar cada arquivo separadamente. Textos longos e feitos ou itens excedentes recebem páginas adicionais, também preenchíveis. Os cálculos exportados podem ser editados manualmente no PDF.

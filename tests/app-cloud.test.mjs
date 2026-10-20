@@ -6,6 +6,7 @@ import * as uiState from '../dist/cloud-ui-state.js';
 import { CloudSync } from '../dist/cloud-sync.js';
 import { acquireAccountLock } from '../dist/account-lock.js';
 import { icon, setButtonLabel, mountButtonIcons } from '../dist/icons.js';
+import { setupTheme } from '../dist/preferences.js';
 
 const KEY='trespasser.record.v1';
 const appSource=(await readFile(new URL('../dist/app.js',import.meta.url),'utf8')).replace(/^import .*;\r?\n/gm,'');
@@ -40,7 +41,7 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
   const writes=[];
   let quotaFailure=false;
   const localStorage={getItem:key=>storage.get(key)??null,setItem(key,value){if(quotaFailure)throw new Error('Quota exceeded');writes.push([key,value]);storage.set(key,value);}};
-  const document={hidden:false,activeElement:null,
+  const document={hidden:false,activeElement:null,documentElement:{dataset:{},style:{}},
     querySelector:selector=>elements.get(selector)||null,
     querySelectorAll:selector=>selector.startsWith('#export-button')?[elements.get('#export-button')]:[],
     createElement:()=>{const element=new Element();element.ownerDocument=document;return element;},createTextNode:text=>({textContent:text}),
@@ -63,8 +64,8 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
     async list(){assert.equal(inCallback,false,'loading the account inside the SDK callback can deadlock');calls.push({type:'list',user:authUser});return structuredClone(remote.get(authUser)||[]);},
     async save(sent){assert.equal(inCallback,false);calls.push({type:'save',user:authUser});const rows=remote.get(authUser)||[];const old=rows.find(r=>r.id===sent.id);if((old?.revision||0)!==sent.revision)return null;const row={id:sent.id,data:structuredClone(sent.data),revision:sent.revision+1,deleted_at:sent.deleted?'2026-10-19T12:00:00Z':null};remote.set(authUser,[...rows.filter(r=>r.id!==row.id),row]);return row;}
   };
-  const window={addEventListener:(event,listener)=>windowListeners.set(event,listener),dispatchEvent:event=>windowListeners.get(event.type)?.(event)};
-  const dependencies={...model,...uiState,CloudSync,acquireAccountLock,icon,setButtonLabel,mountButtonIcons,createCloudClient:()=>({auth,adapter}),cloudConfig:{},navigator:{locks},
+  const window={localStorage,addEventListener(event,listener){const prior=windowListeners.get(event);windowListeners.set(event,prior?value=>{prior(value);listener(value);}:listener);},dispatchEvent:event=>windowListeners.get(event.type)?.(event)};
+  const dependencies={...model,...uiState,CloudSync,acquireAccountLock,icon,setButtonLabel,mountButtonIcons,setupTheme,createCloudClient:()=>({auth,adapter}),cloudConfig:{},navigator:{locks},
     preparePrint(){},prepareExport(){throw new Error('Export is outside this auth test');},
     document,window,localStorage,location:{href:'https://example.test/trespasser-ficha/?ignored=1#ignored',reload(){calls.push({type:'reload'});}},
     setTimeout:(fn,delay)=>{const id=++nextTimer;timers.set(id,{fn,delay});return id;},clearTimeout:id=>timers.delete(id),
@@ -73,7 +74,7 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
   const app=run(...Object.values(dependencies));
   const runTimers=async(delay=0)=>{for(const[id,timer]of[...timers])if(timer.delay===delay){timers.delete(id);timer.fn();}await flush();};
   function edit(path,value){const target={dataset:{field:path},value,type:'text',matches:selector=>selector==='[data-field]'};documentListeners.get('input')({target});}
-  return{app,storage,writes,elements,auth,adapter,calls,emit,runTimers,edit,remote,locks,windowListeners,setQuotaFailure:value=>{quotaFailure=value;},
+  return{app,storage,localStorage,writes,elements,auth,adapter,calls,emit,runTimers,edit,remote,locks,windowListeners,document,clickAction:(action,extra={})=>documentListeners.get('click')({target:{closest:()=>({dataset:{action,...extra}})}}),setQuotaFailure:value=>{quotaFailure=value;},
     resolveSession:id=>resolveSession({data:{session:session(id)},error:null})};
 }
 
@@ -130,17 +131,38 @@ test('login returns to a clean project-root URL and export becomes available aft
   assert.equal(f.elements.get('#export-button').disabled,false);
 });
 
-test('account labels retain their decorative symbol through sign-in and sign-out',async()=>{
+test('settings remain available with their engraved gear through sign-in and sign-out',async()=>{
   const f=fixture();await flush();
   const button=f.elements.get('#account-button');
-  assert.equal(button.textContent,'Entrar');
+  assert.equal(button.textContent,'Ajustes');
   assert.match(button.children[0].innerHTML,/aria-hidden="true"/);
   f.emit('account-a');await f.runTimers();
-  assert.equal(button.children[1].textContent,'Conta');
-  assert.match(button.children[0].innerHTML,/icon--helm/);
+  assert.equal(button.children[1].textContent,'Ajustes');
+  assert.match(button.children[0].innerHTML,/icon--settings/);
   await f.app.logoutCloud();
-  assert.equal(button.children[1].textContent,'Entrar');
-  assert.equal(button.dataset.icon,'helm');
+  assert.equal(button.children[1].textContent,'Ajustes');
+  assert.equal(button.dataset.icon,'settings');
+});
+
+test('settings change appearance independently from characters and expose automatic saving without a manual sync action',async()=>{
+  const f=fixture({initialUser:'account-a'});await flush();
+  f.elements.get('#account-button').listeners.get('click')();
+  assert.equal(f.elements.get('#dialog-title').textContent,'Configurações');
+  const content=f.elements.get('#dialog-content').innerHTML;
+  assert.match(content,/data-theme-value="dark"/);
+  assert.match(content,/data-action="cloud-logout"/);
+  assert.doesNotMatch(content,/data-action="cloud-sync"|Sincronizar agora/);
+  const archive=f.storage.get(KEY),accountArchive=f.storage.get(`${KEY}.cloud.account-a`),requests=f.calls.length;
+  f.clickAction('theme',{themeValue:'dark'});
+  assert.equal(f.document.documentElement.dataset.theme,'dark');
+  assert.equal(f.storage.get('trespasser.theme.v1'),'dark');
+  assert.equal(f.storage.get(KEY),archive);
+  assert.equal(f.storage.get(`${KEY}.cloud.account-a`),accountArchive);
+  assert.equal(f.calls.length,requests);
+  f.windowListeners.get('storage')({key:'trespasser.theme.v1',newValue:'light',storageArea:f.localStorage});
+  assert.equal(f.document.documentElement.dataset.theme,'light');
+  assert.equal(f.storage.get(KEY),archive);
+  assert.equal(f.calls.length,requests);
 });
 
 test('a stalled session check releases the account dialog and a later valid auth event still works',async()=>{

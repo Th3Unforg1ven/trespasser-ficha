@@ -41,8 +41,8 @@ export function setupLanding({document,window,sessionStorage,location},{setLabel
     const signedIn=Boolean(event.detail?.signedIn);
     const login=document.querySelector('#landing-login');
     const ready=Boolean(event.detail?.ready);
-    setLabel(login,signedIn?'Minha conta':'Entrar com Google','helm');
-    login.dataset.action=signedIn?'cloud-account':'cloud-login';
+    setLabel(login,signedIn?'Configurações':'Entrar com Google',signedIn?'settings':'helm');
+    login.dataset.action=signedIn?'settings':'cloud-login';
     login.disabled=!ready;
     login.setAttribute('aria-busy',String(!ready));
     document.querySelector('#landing-guest').hidden=signedIn;
