@@ -1,30 +1,29 @@
-import { normalizeSyncCharacter, characterFingerprint, mergeCharacter, isSyncCharacterId } from './sync-state.js';
+import { normalizeSyncCharacter, normalizeSyncRecord, recordFingerprint, mergeRecord, isSyncCharacterId } from './sync-state.js?v=havens-1';
 
 const CACHE_VERSION = 1;
 const MAX_RECORDS = 10_000;
 const clone = value => JSON.parse(JSON.stringify(value));
-const same = (left, right) => characterFingerprint(left) === characterFingerprint(right);
 const validRevision = value => Number.isSafeInteger(value) && value >= 0;
 
-function normalizeRecords(records) {
+function normalizeRecords(records, normalizeRecord) {
   if (!Array.isArray(records) || records.length > MAX_RECORDS) throw new Error('Lista de fichas inválida.');
-  const normalized = records.map(normalizeSyncCharacter);
+  const normalized = records.map(value => normalizeRecord(value));
   if (new Set(normalized.map(record => record.id)).size !== normalized.length) throw new Error('Há identificadores de ficha repetidos.');
   return normalized;
 }
 
-function normalizeRow(input) {
+function normalizeRow(input, normalizeRecord) {
   if (!input || typeof input !== 'object' || !isSyncCharacterId(input.id) || !validRevision(input.revision) || input.revision < 1) throw new Error('Resposta de sincronização inválida.');
   if (input.deleted_at !== null && input.deleted_at !== undefined && (typeof input.deleted_at !== 'string' || !input.deleted_at)) throw new Error('Exclusão de ficha inválida.');
   const deleted = Boolean(input.deleted_at);
-  const data = deleted ? null : normalizeSyncCharacter(input.data);
+  const data = deleted ? null : normalizeRecord(input.data);
   if (data && data.id !== input.id) throw new Error('A resposta da nuvem contém um identificador diferente.');
   return { id: input.id, revision: input.revision, deleted, data };
 }
 
-function normalizeRows(rows) {
+function normalizeRows(rows, normalizeRecord) {
   if (!Array.isArray(rows) || rows.length > MAX_RECORDS * 2) throw new Error('Resposta de sincronização inválida.');
-  const normalized = rows.map(normalizeRow);
+  const normalized = rows.map(row => normalizeRow(row, normalizeRecord));
   if (new Set(normalized.map(row => row.id)).size !== normalized.length) throw new Error('A nuvem retornou fichas repetidas.');
   return normalized;
 }
@@ -36,9 +35,13 @@ function normalizeRows(rows) {
  * Scheduling, authentication, pagination and transport timeouts belong outside.
  */
 export class CloudSync {
-  constructor({ adapter, storage, cacheKey, onChange = () => {}, onStatus = () => {}, onConflict = () => {}, makeId } = {}) {
+  constructor({ adapter, storage, cacheKey, onChange = () => {}, onStatus = () => {}, onConflict = () => {}, makeId, normalizeRecord = normalizeSyncCharacter } = {}) {
     if (!adapter || typeof adapter.list !== 'function' || typeof adapter.save !== 'function') throw new Error('Adaptador de sincronização inválido.');
     if (typeof cacheKey !== 'string' || !cacheKey) throw new Error('Cache da conta não informado.');
+    if (typeof normalizeRecord !== 'function') throw new Error('Normalizador de ficha inválido.');
+    this.normalizeRecord = input => normalizeSyncRecord(input, normalizeRecord);
+    this.fingerprint = input => recordFingerprint(input, this.normalizeRecord);
+    this.same = (left, right) => this.fingerprint(left) === this.fingerprint(right);
     this.adapter = adapter;
     this.storage = storage;
     this.cacheKey = cacheKey;
@@ -72,7 +75,7 @@ export class CloudSync {
     this.viewKey = null;
     this.storageError = '';
     this.cacheWritable = true;
-    this.records = normalizeRecords(records);
+    this.records = normalizeRecords(records, this.normalizeRecord);
     this.activeId = activeId;
     this.rows = new Map(this.records.map(record => [record.id, { id: record.id, revision: 0, deleted: false, base: null }]));
     this._loadCache();
@@ -90,7 +93,7 @@ export class CloudSync {
   /** Local edits are already rendered by the caller; never echo them to onChange. */
   setRecords(records, activeId = this.activeId) {
     if (!this.running) return this.getSnapshot();
-    const next = normalizeRecords(records);
+    const next = normalizeRecords(records, this.normalizeRecord);
     this.records = next;
     this.activeId = activeId;
     for (const record of next) if (!this.rows.has(record.id)) this.rows.set(record.id, { id: record.id, revision: 0, deleted: false, base: null });
@@ -138,8 +141,8 @@ export class CloudSync {
 
   _setRecord(character) {
     const index = this.records.findIndex(record => record.id === character.id);
-    if (index === -1) this.records.push(normalizeSyncCharacter(character));
-    else this.records[index] = normalizeSyncCharacter(character);
+    if (index === -1) this.records.push(this.normalizeRecord(character));
+    else this.records[index] = this.normalizeRecord(character);
   }
 
   _removeRecord(id) {
@@ -151,7 +154,7 @@ export class CloudSync {
   }
 
   _viewKey() {
-    return JSON.stringify([this.activeId, this.records.map(characterFingerprint)]);
+    return JSON.stringify([this.activeId, this.records.map(record => this.fingerprint(record))]);
   }
 
   _commit() {
@@ -183,6 +186,9 @@ export class CloudSync {
       if (!this.storage || typeof this.storage.getItem !== 'function') throw new Error('Armazenamento local indisponível.');
       raw = this.storage.getItem(this.cacheKey);
     } catch {
+      // An unread cache may contain the only copy of pending edits. Never
+      // replace it later in this instance, even when writes still succeed.
+      this.cacheWritable = false;
       this.storageError = 'Não foi possível ler a cópia deste navegador.';
       this._status('error', this.storageError);
       return;
@@ -191,11 +197,11 @@ export class CloudSync {
     try {
       const cache = JSON.parse(raw);
       if (!cache || cache.version !== CACHE_VERSION || !Array.isArray(cache.rows) || cache.rows.length > MAX_RECORDS * 2) throw new Error('Cache inválido.');
-      const records = normalizeRecords(cache.records);
+      const records = normalizeRecords(cache.records, this.normalizeRecord);
       const rows = new Map();
       for (const entry of cache.rows) {
         if (!entry || !isSyncCharacterId(entry.id) || !validRevision(entry.revision) || typeof entry.deleted !== 'boolean' || rows.has(entry.id)) throw new Error('Cache inválido.');
-        const base = entry.base === null ? null : normalizeSyncCharacter(entry.base);
+        const base = entry.base === null ? null : this.normalizeRecord(entry.base);
         if ((base && base.id !== entry.id) || (entry.deleted && base) || (entry.revision === 0 && (base || entry.deleted)) || (entry.revision > 0 && !entry.deleted && !base)) throw new Error('Cache inválido.');
         rows.set(entry.id, { id: entry.id, revision: entry.revision, deleted: entry.deleted, base });
       }
@@ -216,13 +222,13 @@ export class CloudSync {
     const pending = [];
     for (const id of new Set([...this.rows.keys(), ...this.records.map(record => record.id)])) {
       const local = this._record(id), row = this.rows.get(id);
-      if (local ? (!row || !row.base || row.deleted || !same(local, row.base)) : (row?.base && !row.deleted)) pending.push(id);
+      if (local ? (!row || !row.base || row.deleted || !this.same(local, row.base)) : (row?.base && !row.deleted)) pending.push(id);
     }
     return pending;
   }
 
   _remember(remote) {
-    this.rows.set(remote.id, { id: remote.id, revision: remote.revision, deleted: remote.deleted, base: remote.data ? normalizeSyncCharacter(remote.data) : null });
+    this.rows.set(remote.id, { id: remote.id, revision: remote.revision, deleted: remote.deleted, base: remote.data ? this.normalizeRecord(remote.data) : null });
   }
 
   _fork(character, type, message, paths = []) {
@@ -234,7 +240,7 @@ export class CloudSync {
     if (!id) throw new Error('Não foi possível preservar uma cópia da ficha.');
     const suffix = ' (conflito)';
     const name = character.name || 'Sem nome';
-    const copy = normalizeSyncCharacter({ ...character, id, name: name.endsWith(suffix) ? name : `${name.slice(0, 50_000 - suffix.length)}${suffix}` });
+    const copy = this.normalizeRecord({ ...character, id, name: name.endsWith(suffix) ? name : `${name.slice(0, 50_000 - suffix.length)}${suffix}` });
     this._setRecord(copy);
     this.rows.set(id, { id, revision: 0, deleted: false, base: null });
     if (this.activeId === character.id) this.activeId = id;
@@ -245,7 +251,7 @@ export class CloudSync {
   _reconcileRow(remote) {
     const local = this._record(remote.id), known = this.rows.get(remote.id);
     if (remote.deleted) {
-      if (local && (!known?.base || known.deleted || !same(local, known.base))) {
+      if (local && (!known?.base || known.deleted || !this.same(local, known.base))) {
         this._fork(local, 'remote-deleted', 'A ficha foi excluída em outro dispositivo. Suas alterações foram preservadas em uma cópia com “(conflito)”.');
       }
       this._removeRecord(remote.id);
@@ -253,25 +259,25 @@ export class CloudSync {
       return;
     }
     if (!known?.base || known.deleted) {
-      if (local && !same(local, remote.data)) this._fork(local, 'id-collision', 'Encontramos outra versão desta ficha. A versão deste dispositivo foi preservada com “(conflito)”.');
+      if (local && !this.same(local, remote.data)) this._fork(local, 'id-collision', 'Encontramos outra versão desta ficha. A versão deste dispositivo foi preservada com “(conflito)”.');
       this._setRecord(remote.data);
       this._remember(remote);
       return;
     }
     if (!local) {
       // A local deletion is safe only if the acknowledged data is unchanged.
-      if (!same(known.base, remote.data)) {
+      if (!this.same(known.base, remote.data)) {
         this._setRecord(remote.data);
         this._conflict('delete-modified', remote.id, 'A ficha que você excluiu recebeu alterações em outro dispositivo e foi restaurada para preservar esses dados.');
       }
       this._remember(remote);
       return;
     }
-    const merged = mergeCharacter(known.base, local, remote.data);
+    const merged = mergeRecord(known.base, local, remote.data, this.normalizeRecord);
     if (merged.conflicts.length) {
-      this._fork(merged.character, 'fields', 'Dois dispositivos alteraram o mesmo campo. Suas alterações foram preservadas em uma cópia com “(conflito)”.', merged.conflicts);
+      this._fork(merged.record, 'fields', 'Dois dispositivos alteraram o mesmo campo. Suas alterações foram preservadas em uma cópia com “(conflito)”.', merged.conflicts);
       this._setRecord(remote.data);
-    } else this._setRecord(merged.character);
+    } else this._setRecord(merged.record);
     this._remember(remote);
   }
 
@@ -302,7 +308,7 @@ export class CloudSync {
     } else {
       // The request snapshot, rather than the old base, distinguishes keystrokes
       // typed while the request was in flight from genuine concurrent edits.
-      this.rows.set(sent.id, { id: sent.id, revision: sent.revision, deleted: false, base: normalizeSyncCharacter(sent.data) });
+      this.rows.set(sent.id, { id: sent.id, revision: sent.revision, deleted: false, base: this.normalizeRecord(sent.data) });
       this._reconcileRow(saved);
     }
     this._commit();
@@ -311,7 +317,7 @@ export class CloudSync {
   async _pull(generation) {
     const result = await this.adapter.list();
     if (!this._alive(generation)) return false;
-    this._reconcile(normalizeRows(result));
+    this._reconcile(normalizeRows(result, this.normalizeRecord));
     return true;
   }
 
@@ -327,11 +333,11 @@ export class CloudSync {
         this._commit();
         continue;
       }
-      const sent = { id, data: normalizeSyncCharacter(local || known.base), revision: known?.revision ?? 0, deleted: !local };
+      const sent = { id, data: this.normalizeRecord(local || known.base), revision: known?.revision ?? 0, deleted: !local };
       const result = await this.adapter.save(clone(sent));
       if (!this._alive(generation)) return { stopped: true, casFailed };
       if (result === null) casFailed = true;
-      else this._acceptSave(sent, normalizeRow(result));
+      else this._acceptSave(sent, normalizeRow(result, this.normalizeRecord));
     }
     return { stopped: false, casFailed };
   }

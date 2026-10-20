@@ -325,6 +325,25 @@ test('corrupt cache is backed up and storage quota failures keep edits in memory
   assert.equal(device.statuses.at(-1).pending, 0);
 });
 
+test('failed cache read preserves unknown pending data even when storage writes work', async () => {
+  const backend = server([character()]), storage = memoryStorage();
+  const unread = JSON.stringify({ version: 1, records: [character('pending', 'Cópia ainda não enviada')], activeId: 'pending', rows: [] });
+  storage.setItem('account:user-1', unread);
+  storage.getItem = () => { throw new Error('Read denied'); };
+  let writes = 0;
+  const originalSet = storage.setItem;
+  storage.setItem = (key, value) => { writes++; originalSet(key, value); };
+  const device = client(backend, { storage });
+  await device.engine.start();
+  edit(device.engine, records => { records[0].notes = 'Nova edição em memória'; });
+  await device.engine.sync();
+  assert.equal(backend.rows.get('hero').data.notes, 'Nova edição em memória');
+  assert.equal(storage.values.get('account:user-1'), unread);
+  assert.equal(writes, 0);
+  assert.equal(device.statuses.at(-1).localSaved, false);
+  assert.equal(device.statuses.at(-1).pending, 0);
+});
+
 test('empty cache stays empty and user-specific cache keys do not mix account records', async () => {
   const storage = memoryStorage(), backend = server();
   const a = client(backend, { storage });
@@ -337,4 +356,39 @@ test('empty cache stays empty and user-specific cache keys do not mix account re
   await otherUser.engine.start({ records: [character('other-user')] });
   assert.equal(otherUser.engine.getSnapshot().records[0].id, 'other-user');
   assert.deepEqual(JSON.parse(storage.getItem('account:user-1')).records, []);
+});
+
+test('injected record model preserves Haven fields through sync, merge and account cache reload', async () => {
+  const haven = { id: 'refuge', kind: 'haven', name: 'Porto', attributes: { defense: 1 }, treasury: 10, notes: '', hirelings: [] };
+  const normalizeRecord = value => { if (value.kind !== 'haven') throw new Error('Invalid Haven');return clone(value); };
+  const backend = server([haven]), a = client(backend, { normalizeRecord, cacheKey: 'havens:user-1' }), b = client(backend, { normalizeRecord, cacheKey: 'havens:user-1' });
+  await Promise.all([a.engine.start(), b.engine.start()]);
+  edit(a.engine, records => { records[0].attributes.defense = 3; });
+  edit(b.engine, records => { records[0].treasury = 0; });
+  await Promise.all([a.engine.sync(), b.engine.sync()]);
+  assert.equal(backend.rows.get('refuge').data.attributes.defense, 3);
+  assert.equal(backend.rows.get('refuge').data.treasury, 0);
+  assert.equal(Object.hasOwn(backend.rows.get('refuge').data, 'weapons'), false);
+  a.engine.stop();
+  const reloaded = client(backend, { normalizeRecord, storage: a.storage, cacheKey: 'havens:user-1' });
+  await reloaded.engine.start();
+  assert.equal(reloaded.engine.getSnapshot().records[0].kind, 'haven');
+  assert.equal(reloaded.engine.getSnapshot().records[0].treasury, 0);
+  assert.equal(reloaded.storage.getItem('account:user-1'), null);
+});
+
+test('injected models retain both divergent Haven versions and sync deletion tombstones', async () => {
+  const haven = { id: 'refuge', kind: 'haven', name: 'Porto', treasury: 10 };
+  const normalizeRecord = value => { if (value.kind !== 'haven') throw new Error('Invalid Haven');return clone(value); };
+  const backend = server([haven]), a = client(backend, { normalizeRecord, prefix: 'a' }), b = client(backend, { normalizeRecord, prefix: 'b' });
+  await Promise.all([a.engine.start(), b.engine.start()]);
+  edit(a.engine, records => { records[0].treasury = 8; });await a.engine.sync();
+  edit(b.engine, records => { records[0].treasury = 7; });await b.engine.sync();
+  assert.equal(backend.rows.get('refuge').data.treasury, 8);
+  assert.equal(backend.rows.get('b-1').data.treasury, 7);
+  assert.equal(backend.rows.get('b-1').data.kind, 'haven');
+  assert.deepEqual(b.conflicts[0].paths, ['treasury']);
+  b.engine.setRecords(b.engine.getSnapshot().records.filter(record => record.id !== 'b-1'), 'refuge');
+  await b.engine.sync();
+  assert.ok(backend.rows.get('b-1').deleted_at);
 });

@@ -7,23 +7,22 @@ const url=path=>new URL(path,'https://example.test/trespasser-ficha/');
 function fixture({location=url('./'),savedView=null,storedArt=null}={}){
   const session=new Map(savedView?[['trespasser.view.v1',savedView]]:[]);
   const local=new Map(storedArt?[['trespasser.landing.art.v1',storedArt]]:[]);
-  const storage=map=>({getItem:key=>map.get(key)??null,setItem:(key,value)=>map.set(key,value)});
+  const storage=map=>({getItem:key=>map.get(key)??null,setItem:(key,value)=>map.set(key,value),removeItem:key=>map.delete(key)});
   const delegatedActions=[];
+  const navigations=[];
   const node=(data={})=>({dataset:data,listeners:new Map(),attributes:new Map(),hidden:false,focused:false,clicks:0,disabled:false,
     addEventListener(type,fn){this.listeners.set(type,fn);},setAttribute(key,value){this.attributes.set(key,value);},
     focus(){this.focused=true;},click(){if(this.disabled)return;this.clicks++;this.listeners.get('click')?.();if(this.dataset.action)delegatedActions.push(this.dataset.action);}});
-  const selectors=['#landing','#record-workspace','#skip-link','#landing-title','#main','#landing-open','#landing-guest','#landing-login','#account-button','#home-button','.landing-description'];
+  const selectors=['#landing','#record-workspace','#skip-link','#landing-title','#main','#landing-open','#landing-guest','#landing-havens','#account-button','#home-button','.landing-description'];
   const nodes=new Map(selectors.map(selector=>[selector,node()]));
-  nodes.get('#landing-login').disabled=true;
-  nodes.get('#landing-login').dataset.action='cloud-login';
   const choices=[node({landingArt:'castle'}),node({landingArt:'cover'})];
   const windowEvents=new Map();
   const document={readyState:'complete',body:{dataset:{}},querySelector:selector=>nodes.get(selector),querySelectorAll:()=>choices};
   const window={scrollTo(){},addEventListener:(type,fn)=>windowEvents.set(type,fn)};
   const api=setupLanding({document,window,location,sessionStorage:storage(session),localStorage:storage(local)},{
-    mountIcons(){},setLabel(button,text,name){button.textContent=text;button.dataset.icon=name;}
+    mountIcons(){},navigate:destination=>navigations.push(destination)
   });
-  return{api,nodes,document,choices,session,local,windowEvents,delegatedActions};
+  return{api,nodes,document,choices,session,local,windowEvents,delegatedActions,navigations};
 }
 
 test('fresh visits open the title page; an existing tab can resume its workspace',()=>{
@@ -31,6 +30,8 @@ test('fresh visits open the title page; an existing tab can resume its workspace
   assert.equal(initialView(url('./'),'workspace'),'workspace');
   assert.equal(initialView(url('./'),'home'),'home');
   assert.equal(initialView(url('./'),'unexpected'),'home');
+  assert.equal(initialView(url('./#inicio'),'workspace'),'home');
+  assert.equal(initialView(url('./#personagens'),'home'),'workspace');
 });
 
 test('OAuth returns bypass the title page without persisting any callback credential',()=>{
@@ -62,29 +63,38 @@ test('opening sheets, guest access and returning home preserve separate screen f
   assert.equal(f.nodes.get('#account-button').clicks,0);
 });
 
-test('one ready login click reaches the existing delegated action; signed-in users open their account',()=>{
+test('the haven register stays accessible before and after account readiness without opening settings',()=>{
   const f=fixture();
-  f.nodes.get('#landing-login').click();
+  f.nodes.get('#landing-havens').click();
+  assert.deepEqual(f.navigations,['./havens.html']);
   assert.equal(f.document.body.dataset.view,'home');
   assert.deepEqual(f.delegatedActions,[]);
   f.windowEvents.get('trespasser:account')({detail:{signedIn:false,ready:true}});
-  assert.equal(f.nodes.get('#landing-login').disabled,false);
-  assert.equal(f.nodes.get('#landing-login').attributes.get('aria-busy'),'false');
-  f.nodes.get('#landing-login').click();
-  assert.deepEqual(f.delegatedActions,['cloud-login']);
-  assert.equal(f.nodes.get('#account-button').clicks,0);
-  assert.equal(f.document.body.dataset.view,'workspace');
   f.windowEvents.get('trespasser:account')({detail:{signedIn:true,ready:true}});
-  assert.equal(f.nodes.get('#landing-login').textContent,'Configurações');
   assert.equal(f.nodes.get('#landing-guest').hidden,true);
-  f.nodes.get('#landing-login').click();
-  assert.deepEqual(f.delegatedActions,['cloud-login','settings']);
+  f.nodes.get('#landing-havens').click();
+  assert.deepEqual(f.navigations,['./havens.html','./havens.html']);
+  assert.deepEqual(f.delegatedActions,[]);
   f.windowEvents.get('trespasser:account')({detail:{signedIn:false,ready:true}});
-  assert.equal(f.nodes.get('#landing-login').textContent,'Entrar com Google');
   assert.equal(f.nodes.get('#landing-guest').hidden,false);
   f.windowEvents.get('trespasser:account')({detail:{signedIn:false,ready:false}});
-  assert.equal(f.nodes.get('#landing-login').disabled,true);
-  assert.equal(f.nodes.get('#landing-login').attributes.get('aria-busy'),'true');
+  assert.equal(f.nodes.get('#landing-havens').disabled,false);
+  assert.equal(f.nodes.get('#account-button').clicks,0);
+});
+
+test('a completed haven login returns to that register only for a fresh, fixed intent',()=>{
+  const f=fixture({location:url('./#access_token=TEST'),savedView:'home'});
+  f.session.set('trespasser.auth.destination.v1',JSON.stringify({destination:'havens',createdAt:Date.now()}));
+  f.windowEvents.get('trespasser:account')({detail:{signedIn:false,ready:true}});
+  assert.deepEqual(f.navigations,[]);
+  f.windowEvents.get('trespasser:account')({detail:{signedIn:true,ready:true}});
+  assert.deepEqual(f.navigations,['./havens.html']);
+  f.windowEvents.get('trespasser:account')({detail:{signedIn:true,ready:true}});
+  assert.equal(f.navigations.length,1);
+  const normal=fixture();
+  normal.session.set('trespasser.auth.destination.v1',JSON.stringify({destination:'havens',createdAt:Date.now()}));
+  normal.windowEvents.get('trespasser:account')({detail:{signedIn:true,ready:true}});
+  assert.deepEqual(normal.navigations,[]);
 });
 
 test('an old cover preference cannot replace the responsive scene or affect opening sheets',()=>{

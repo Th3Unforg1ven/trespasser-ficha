@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCharacter } from '../dist/model.js';
-import { characterFingerprint, mergeCharacter, normalizeSyncCharacter, MAX_SYNC_BYTES, isSyncCharacterId } from '../dist/sync-state.js';
+import { characterFingerprint, mergeCharacter, normalizeSyncCharacter, normalizeSyncRecord, recordFingerprint, mergeRecord, MAX_SYNC_BYTES, isSyncCharacterId } from '../dist/sync-state.js';
 
 const copy = value => structuredClone(value);
 const fixture = () => ({ ...createCharacter('João'), id: 'shared-character' });
@@ -175,4 +175,33 @@ test('root character IDs match the database UTF-8 byte limit without changing ne
   const nestedId = 'item-'.repeat(100);
   const normalized = normalizeSyncCharacter({ id: 'valid', inventory: [{ id: nestedId }] });
   assert.equal(normalized.inventory[0].id, nestedId);
+});
+
+test('generic model fingerprints and merge retain non-character fields', () => {
+  const normalize = value => {
+    if (value.kind !== 'haven') throw new Error('Expected Haven');
+    return structuredClone(value);
+  };
+  const base = { id: 'haven', kind: 'haven', name: 'Porto', attributes: { defense: 1, trade: 2 }, purse: 10, hirelings: [] };
+  const local = copy(base), remote = copy(base);
+  local.attributes.defense = 3;remote.purse = 0;
+  assert.notEqual(recordFingerprint(base, normalize), recordFingerprint(local, normalize));
+  const result = mergeRecord(base, local, remote, normalize);
+  assert.deepEqual(result.conflicts, []);
+  assert.equal(result.record.attributes.defense, 3);
+  assert.equal(result.record.purse, 0);
+  assert.equal(result.record.kind, 'haven');
+  local.hirelings = [{ id: 'a' }];remote.hirelings = [{ id: 'b' }];
+  assert.deepEqual(mergeRecord(base, local, remote, normalize).conflicts, ['hirelings']);
+});
+
+test('generic normalization isolates mutating callbacks and rejects unstable or unsafe output', () => {
+  const source = { id: 'haven', name: 'Original', kind: 'haven', resources: { value: 0 } };
+  const normalized = normalizeSyncRecord(source, value => { value.name = 'Normalized';return value; });
+  assert.equal(source.name, 'Original');
+  normalized.resources.value = 4;
+  assert.equal(source.resources.value, 0);
+  assert.throws(() => normalizeSyncRecord(source, value => ({ ...value, id: 'different' })), /identificador/);
+  assert.throws(() => normalizeSyncRecord(source, () => JSON.parse('{"id":"haven","constructor":true}')), /inválido/);
+  assert.throws(() => normalizeSyncRecord({ name: 'No ID' }, value => ({ ...value, id: 'generated' })), /identificador/);
 });

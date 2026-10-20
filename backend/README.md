@@ -45,6 +45,37 @@ retornar uma linha. Se um pedido tiver sido confirmado no servidor mas a respost
 se perder, buscar e comparar com o estado enviado antes de criar uma duplicata.
 Desconectar uma conta não deve enviar pendências dela para outra conta.
 
+## Refúgios
+
+`havens-schema.sql` adiciona `public.trespasser_havens` e a RPC
+`public.trespasser_save_haven`, com os mesmos parâmetros, revisões CAS, tombstones,
+grants restritos e isolamento por `(user_id, id)`. Além do ID correspondente,
+o JSON exige `kind: 'haven'`. A tabela de personagens e o Auth compartilhado
+não são alterados. A existência dos arquivos não confirma aplicação no banco.
+
+O cliente seleciona esses nomes na configuração de `createCloudClient` e injeta
+o modelo de refúgio no motor comum:
+
+```js
+new CloudSync({
+  adapter: connection.adapter.forUser(user.id),
+  storage: localStorage,
+  cacheKey: `trespasser.havens.v1.cloud.${user.id}`,
+  normalizeRecord: normalizeHaven,
+});
+```
+
+Sem `normalizeRecord`, o motor mantém o modelo de personagem. A validação JSON,
+os limites de sincronização, a mesclagem de três versões e as cópias de conflito
+continuam comuns aos dois modelos. Caches e locks dos refúgios são separados dos
+personagens; a conta Google é compartilhada.
+
+`havens-schema-tests.sql` é o equivalente transacional com `ROLLBACK`: cobre quatro
+contas, IDs iguais, CAS, RLS, rejeição de `kind` errado/ausente, grants, exclusões e
+invariantes. Confere também que a quantidade e a soma das revisões de personagens
+permanecem iguais. Executar somente depois de aplicar e verificar os objetos de
+refúgio, com conexão administrativa e quatro contas Auth existentes.
+
 ## Verificação antes de publicar
 
 Antes de aplicar, inspecionar o projeto aprovado e confirmar que os novos nomes
@@ -85,7 +116,7 @@ Nenhuma função usa `SECURITY DEFINER`. O trigger de invariantes também é
 com o papel do usuário; a API direta só pode operar os registros da própria conta,
 sem hard delete e respeitando o mesmo trigger.
 
-## Aplicação e validação
+## Aplicação e validação dos personagens
 
 Em 19/10/2026, o esquema foi aplicado no Biocoded pelo SQL Editor do dashboard.
 O caminho nativo de escrita havia falhado com `Invalid/expired requestState`.
@@ -102,3 +133,29 @@ anônima ou permissão de hard delete para o cliente.
 Os advisors de segurança e desempenho não apontaram achados para objetos
 `trespasser_*`; os achados de outros objetos do projeto compartilhado ficaram
 fora desta alteração.
+
+## Aplicação e validação dos refúgios
+
+Em 20/10/2026, `havens-schema.sql` foi aplicado integralmente pelo SQL Editor do
+dashboard do projeto Biocoded. O editor retornou `Success. No rows returned`.
+A tentativa anterior pelo conector ficou sem resultado e foi interrompida; a
+consulta posterior confirmou os objetos ausentes antes da aplicação pelo editor.
+Não foi criada uma entrada artificial de histórico de migrations.
+
+Após a aplicação, uma consulta independente pelo conector confirmou a tabela,
+RLS habilitada e forçada, as três políticas com ownership pela conta e as duas
+funções com `SECURITY INVOKER` e `search_path` vazio. Confirmou leitura e execução
+da RPC por `authenticated`, sem leitura/execução anônima, sem hard delete e sem
+permissão de alterar `user_id`. A leitura encontrou zero registros e zero fixtures
+`haven-schema-test-*`.
+
+Os advisors de segurança e desempenho consultados após a aplicação não apontaram
+achados para objetos `trespasser_*`. Os achados em objetos do projeto compartilhado
+e no Auth ficaram fora desta alteração.
+
+`havens-schema-tests.sql` foi executado em uma consulta separada no SQL Editor,
+sem exceções, terminando em `ROLLBACK`. Os testes cobriram quatro contas existentes,
+criação e edição por revisão, conflitos, ownership, acesso anônimo, payloads e
+exclusão lógica. Também verificaram que a contagem e a soma de revisões dos
+personagens permaneceram iguais. A consulta posterior pelo conector confirmou
+zero refúgios e zero fixtures persistidos.

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#171717">
+  <meta name="description" content="Registro de Refúgios de Trespasser v2.1.3. Edite, salve na conta e exporte PDF preenchível e JSON.">
+  <title>Trespasser · Registro de Refúgios</title>
+  <script>(()=>{let p='system';try{const s=localStorage.getItem('trespasser.theme.v1');if(['light','dark','system'].includes(s))p=s;}catch{}let d=false;try{d=matchMedia('(prefers-color-scheme: dark)').matches;}catch{}const t=p==='system'?(d?'dark':'light'):p;document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t;})();</script>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./sheet.css?v=ink-1">
+  <link rel="stylesheet" href="./controls.css?v=ink-1">
+  <link rel="stylesheet" href="./havens.css?v=havens-1">
+  <link rel="stylesheet" href="./theme.css?v=settings-1">
+  <script type="module" src="./havens.js?v=havens-1"></script>
+</head>
+<body class="haven-page">
+  <a class="skip-link" href="#main">Ir para o refúgio</a>
+  <div class="workspace haven-workspace">
+    <header class="topbar">
+      <div class="record-toolbar">
+        <div class="archive-tools">
+          <a class="button subtle" href="./#inicio" data-icon="gate"><span class="button-label">Início</span></a>
+          <a class="button subtle" href="./#personagens" data-icon="person"><span class="button-label">Personagens</span></a>
+          <button type="button" class="button" id="new-haven" data-icon="plus"><span class="button-label">Novo refúgio</span></button>
+        </div>
+        <div class="top-actions">
+          <button type="button" class="button" id="import-button" data-icon="import"><span class="button-label">Importar</span></button>
+          <button type="button" class="button" id="export-button" data-icon="export"><span class="button-label">Exportar</span></button>
+          <button type="button" class="button" id="account-button" data-icon="settings" aria-label="Configurações"><span class="button-label">Ajustes</span></button>
+        </div>
+      </div>
+      <div class="record-status"><div class="breadcrumb">REFÚGIOS <span>/</span> <span id="breadcrumb-name">Novo refúgio</span></div><span id="save-status" role="status">Salvo neste navegador</span></div>
+      <div class="haven-picker"><label for="haven-select">Seus refúgios <small>Your havens</small></label><select id="haven-select" aria-label="Trocar refúgio"></select><button type="button" class="button" id="manage-haven" data-icon="record"><span class="button-label">Gerenciar</span></button></div>
+    </header>
+    <main id="main" tabindex="-1">
+      <div class="haven-heading"><div class="record-mark"><img src="./assets/Image16.png" alt="Trespasser" width="848" height="287"><h1>Registro de Refúgios</h1><span>HAVEN RECORD · V2.1.3</span></div><div id="haven-identity" class="haven-identity"></div></div>
+      <div id="haven-metrics" class="haven-metrics"></div>
+      <nav id="navigation" class="sheet-navigation" aria-label="Seções do refúgio"></nav>
+      <div id="haven-content"></div>
+      <footer class="page-footer"><span>TRESPASSER V2.1.3 · REGISTRO NÃO OFICIAL</span><button type="button" id="about-button">Regras & salvamento</button></footer>
+    </main>
+  </div>
+  <dialog id="utility-dialog" aria-labelledby="dialog-title"><div class="dialog-header"><h2 id="dialog-title"></h2><button type="button" class="icon-button" id="dialog-close" data-icon="close" aria-label="Fechar"><span class="button-label sr-only">Fechar</span></button></div><div id="dialog-content"></div></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <input type="file" id="import-file" accept=".json,application/json" hidden>
+</body>
+</html>

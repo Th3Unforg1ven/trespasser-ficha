@@ -45,18 +45,29 @@ function requireId(value, label) {
   if (typeof value !== 'string' || !value.trim() || value.length > 50_000) throw new Error(`${label}: identificador ausente ou inválido.`);
 }
 
-/** A new validated character snapshot; never mutates its source. */
-export function normalizeSyncCharacter(input) {
+/** Shared JSON/identity limits; the supplied model owns its domain validation. */
+export function normalizeSyncRecord(input, normalizeRecord) {
   inspectJson(input);
   if (!isObject(input)) throw new Error('Ficha inválida.');
   requireId(input.id, 'Ficha');
   if (!isSyncCharacterId(input.id)) throw new Error('Ficha: identificador inválido; use até 200 bytes, sem espaços nas pontas.');
-  for (const key of ['inventory', 'deeds']) {
-    if (Array.isArray(input[key])) for (const item of input[key]) requireId(item?.id, key);
-  }
-  const character = normalizeCharacter(input);
-  if (new TextEncoder().encode(JSON.stringify(character)).byteLength > MAX_SYNC_BYTES) throw new Error('Ficha grande demais para sincronizar.');
-  return character;
+  if (typeof normalizeRecord !== 'function') throw new Error('Normalizador de ficha inválido.');
+  const record = normalizeRecord(clone(input));
+  inspectJson(record);
+  if (!isObject(record) || record.id !== input.id) throw new Error('O normalizador não pode alterar o identificador da ficha.');
+  if (record.name !== undefined && typeof record.name !== 'string') throw new Error('Nome de ficha inválido.');
+  if (new TextEncoder().encode(JSON.stringify(record)).byteLength > MAX_SYNC_BYTES) throw new Error('Ficha grande demais para sincronizar.');
+  return clone(record);
+}
+
+/** A new validated character snapshot; never mutates its source. */
+export function normalizeSyncCharacter(input) {
+  return normalizeSyncRecord(input, data => {
+    for (const key of ['inventory', 'deeds']) {
+      if (Array.isArray(data[key])) for (const item of data[key]) requireId(item?.id, key);
+    }
+    return normalizeCharacter(data);
+  });
 }
 
 function canonical(value) {
@@ -67,7 +78,12 @@ function canonical(value) {
 
 /** Canonical JSON, not a lossy hash. Object order is ignored; array order matters. */
 export function characterFingerprint(input) {
-  return canonical(normalizeSyncCharacter(input));
+  return recordFingerprint(input);
+}
+
+/** Fingerprint a model such as a character or Haven without losing its fields. */
+export function recordFingerprint(input, normalizeRecord = normalizeSyncCharacter) {
+  return canonical(normalizeSyncRecord(input, normalizeRecord));
 }
 
 function equal(left, right) {
@@ -114,9 +130,15 @@ function mergeValue(base, local, remote, path, conflicts) {
  * Known absent fields use model defaults; deleted optional state keys stay gone.
  */
 export function mergeCharacter(base, local, remote) {
-  const snapshots = [base, local, remote].map(normalizeSyncCharacter);
+  const result = mergeRecord(base, local, remote);
+  return { character: result.record, conflicts: result.conflicts };
+}
+
+/** Model-independent merge with the same atomic-array and conflict semantics. */
+export function mergeRecord(base, local, remote, normalizeRecord = normalizeSyncCharacter) {
+  const snapshots = [base, local, remote].map(value => normalizeSyncRecord(value, normalizeRecord));
   if (new Set(snapshots.map(character => character.id)).size !== 1) throw new Error('Não é possível mesclar fichas diferentes.');
   const conflicts = [];
   const merged = mergeValue(...snapshots, '', conflicts);
-  return { character: normalizeSyncCharacter(merged), conflicts };
+  return { record: normalizeSyncRecord(merged, normalizeRecord), conflicts };
 }

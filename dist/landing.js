@@ -1,4 +1,5 @@
-import { setButtonLabel, mountButtonIcons } from './icons.js?v=ink-1';
+import { mountButtonIcons } from './icons.js?v=ink-1';
+import { consumeHavenReturn } from './auth-return.js';
 
 const VIEW_KEY='trespasser.view.v1';
 
@@ -10,13 +11,16 @@ export function isAuthReturn(location) {
 }
 
 export function initialView(location, savedView) {
+  if(location.hash==='#inicio')return 'home';
+  if(location.hash==='#personagens')return 'workspace';
   return isAuthReturn(location) || savedView==='workspace' ? 'workspace' : 'home';
 }
 
-export function setupLanding({document,window,sessionStorage,location},{setLabel=setButtonLabel,mountIcons=mountButtonIcons}={}) {
+export function setupLanding({document,window,sessionStorage,location},{mountIcons=mountButtonIcons,navigate=url=>window.location.assign(url)}={}) {
   const landing=document.querySelector('#landing');
   const workspace=document.querySelector('#record-workspace');
   if(!landing||!workspace)return;
+  const authReturn=isAuthReturn(location);
   mountIcons(document);
   const read=(storage,key)=>{try{return storage.getItem(key);}catch{return null;}};
   const write=(storage,key,value)=>{try{storage.setItem(key,value);}catch{/* Navigation also works without browser storage. */}};
@@ -32,23 +36,15 @@ export function setupLanding({document,window,sessionStorage,location},{setLabel
   };
   document.querySelector('#landing-open').addEventListener('click',()=>setView('workspace'));
   document.querySelector('#landing-guest').addEventListener('click',()=>setView('workspace'));
-  document.querySelector('#landing-login').addEventListener('click',()=>{
-    setView('workspace');
-    // The existing document click handler handles cloud-login or cloud-account.
-  });
+  document.querySelector('#landing-havens').addEventListener('click',()=>navigate('./havens.html'));
   document.querySelector('#home-button').addEventListener('click',()=>setView('home'));
   window.addEventListener('trespasser:account',event=>{
     const signedIn=Boolean(event.detail?.signedIn);
-    const login=document.querySelector('#landing-login');
-    const ready=Boolean(event.detail?.ready);
-    setLabel(login,signedIn?'Configurações':'Entrar com Google',signedIn?'settings':'helm');
-    login.dataset.action=signedIn?'settings':'cloud-login';
-    login.disabled=!ready;
-    login.setAttribute('aria-busy',String(!ready));
+    if(signedIn&&consumeHavenReturn(sessionStorage,{authReturn})) {navigate('./havens.html');return;}
     document.querySelector('#landing-guest').hidden=signedIn;
     document.querySelector('.landing-description').textContent=signedIn
-      ?'Suas fichas salvas na conta estão disponíveis no computador e no celular.'
-      :'Abra suas fichas ou entre com Google para continuar no computador e no celular.';
+      ?'Seus personagens e refúgios salvos na conta estão disponíveis no computador e no celular.'
+      :'Registre personagens e refúgios. Entre com Google nas configurações para continuar no computador e no celular.';
   });
   setView(initialView(location,read(sessionStorage,VIEW_KEY)),false);
   return {setView};

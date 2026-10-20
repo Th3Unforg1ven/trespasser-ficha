@@ -3,7 +3,7 @@ import { preparePrint } from './print.js';
 import { prepareExport } from './export-bundle.js';
 import { createCloudClient } from './cloud-client.js';
 import { cloudConfig } from './cloud-config.js';
-import { CloudSync } from './cloud-sync.js';
+import { CloudSync } from './cloud-sync.js?v=havens-1';
 import { isPristineCharacter, localMigrationCandidates, mergeLocalCharacters } from './cloud-ui-state.js';
 import { acquireAccountLock } from './account-lock.js';
 import { icon, setButtonLabel, mountButtonIcons } from './icons.js?v=ink-1';
@@ -105,7 +105,7 @@ function pendingLocalCharacters() {
 function hasUncachedEdits() { return cloudStatus.pending>0 && cloudStatus.localSaved===false; }
 function settingsContent() {
   const preference=theme.getPreference();
-  const choices=[['light','Claro','torch'],['dark','Noturno','moon'],['system','Automático','settings']];
+  const choices=[['light','Claro','torch'],['dark','Modo escuro','moon'],['system','Automático','settings']];
   return `<section class="settings-appearance" aria-labelledby="appearance-title"><h3 id="appearance-title">Aparência</h3><div class="settings-themes" role="group" aria-label="Tema da ficha">${choices.map(([value,label,symbol])=>`<button type="button" class="button" data-icon="${symbol}" data-action="theme" data-theme-value="${value}" aria-pressed="${preference===value}">${label}</button>`).join('')}</div><p class="panel-note">Automático acompanha o tema do dispositivo. A escolha fica salva neste navegador.</p></section><section class="settings-section" aria-labelledby="settings-account-title"><h3 id="settings-account-title">Conta</h3>${accountContent()}</section>`;
 }
 function refreshThemeControls() {
