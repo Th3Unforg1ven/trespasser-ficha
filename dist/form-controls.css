@@ -1,0 +1,234 @@
+/* Writing spaces and marks share the sheet's engraved, monochrome ink. */
+@media screen {
+  :root {
+    --form-ink:#272821;
+    --form-edge:#66665a;
+    --form-paper:#f9f9f4;
+    --form-hover:#f0f0e9;
+    --form-focus:#fffef8;
+    --form-muted:#77786d;
+    --form-hatch:#383b2814;
+    --form-rule:#383b2830;
+    --form-check-fill:#282a23;
+    --form-check-ink:#fffef7;
+    --form-frame:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 50' fill='none'%3E%3Cpath d='M3 3.3 38 2.8 76.8 3.2 77.1 24 76.6 46.8 42 47.2 3.2 46.7 2.8 28Z' stroke='%2366665a' stroke-width='1.25'/%3E%3Cpath d='m7 1.3 24 .2m42 9 .3 14M6 49l21-.3' stroke='%2366665a' stroke-width='.6'/%3E%3C/svg%3E");
+    --form-arrow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='13' viewBox='0 0 18 13' fill='none'%3E%3Cpath d='m2.6 3.4 6.5 6.2 6.1-6.5M5.2 3.5 9 6.8l3.9-3.7' stroke='%23272821' stroke-width='1.25' stroke-linecap='square' stroke-linejoin='miter'/%3E%3C/svg%3E");
+    --form-check:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18' fill='none'%3E%3Cpath d='m3.1 8.3 3.7 5.1L15 3.6M4 8.1l3.1 3.6' stroke='%23fffef7' stroke-width='1.6' stroke-linecap='square' stroke-linejoin='miter'/%3E%3C/svg%3E");
+    --form-diamond:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18' fill='none'%3E%3Cpath d='m9 1.5 7.4 7.3-7.2 7.7L1.5 9Z' stroke='%2366665a' stroke-width='1.25'/%3E%3C/svg%3E");
+    --form-diamond-checked:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18' fill='none'%3E%3Cpath d='m9 1.5 7.4 7.3-7.2 7.7L1.5 9Z' stroke='%23272821' stroke-width='1.25'/%3E%3Cpath d='m9 4.7 4.1 4.2-4.2 4.4L4.7 9Z' fill='%23272821'/%3E%3C/svg%3E");
+  }
+
+  html[data-theme="dark"] {
+    --form-ink:#e4e4d9;
+    --form-edge:#b2b2a4;
+    --form-paper:#242521;
+    --form-hover:#2e3029;
+    --form-focus:#303229;
+    --form-muted:#b1b2a5;
+    --form-hatch:#e0e3c414;
+    --form-rule:#e0e3c431;
+    --form-check-fill:#e2e3d5;
+    --form-check-ink:#242521;
+    --form-frame:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 50' fill='none'%3E%3Cpath d='M3 3.3 38 2.8 76.8 3.2 77.1 24 76.6 46.8 42 47.2 3.2 46.7 2.8 28Z' stroke='%23b2b2a4' stroke-width='1.25'/%3E%3Cpath d='m7 1.3 24 .2m42 9 .3 14M6 49l21-.3' stroke='%23b2b2a4' stroke-width='.6'/%3E%3C/svg%3E");
+    --form-arrow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='13' viewBox='0 0 18 13' fill='none'%3E%3Cpath d='m2.6 3.4 6.5 6.2 6.1-6.5M5.2 3.5 9 6.8l3.9-3.7' stroke='%23e4e4d9' stroke-width='1.25' stroke-linecap='square' stroke-linejoin='miter'/%3E%3C/svg%3E");
+    --form-check:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18' fill='none'%3E%3Cpath d='m3.1 8.3 3.7 5.1L15 3.6M4 8.1l3.1 3.6' stroke='%23242521' stroke-width='1.6' stroke-linecap='square' stroke-linejoin='miter'/%3E%3C/svg%3E");
+    --form-diamond:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18' fill='none'%3E%3Cpath d='m9 1.5 7.4 7.3-7.2 7.7L1.5 9Z' stroke='%23b2b2a4' stroke-width='1.25'/%3E%3C/svg%3E");
+    --form-diamond-checked:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18' fill='none'%3E%3Cpath d='m9 1.5 7.4 7.3-7.2 7.7L1.5 9Z' stroke='%23e4e4d9' stroke-width='1.25'/%3E%3Cpath d='m9 4.7 4.1 4.2-4.2 4.4L4.7 9Z' fill='%23e4e4d9'/%3E%3C/svg%3E");
+  }
+
+  /* Keep the original size, number typography and touch areas. Only the frame changes. */
+  :is(.workspace,#utility-dialog) :is(input:not([type]),input[type="text"],input[type="number"],input[type="email"],input[type="password"],input[type="url"],input[type="search"],input[type="tel"],textarea,select):not(.resource-control input) {
+    border:1px solid var(--form-edge);
+    border-image:var(--form-frame) 5 / 2px / 0 stretch;
+    border-radius:0;
+    background-color:var(--form-paper);
+    color:var(--form-ink);
+    box-shadow:none;
+    max-width:100%;
+    transition:background-color .14s ease,border-color .14s ease;
+  }
+
+  :is(.workspace,#utility-dialog) :is(input,textarea)::placeholder {
+    color:var(--form-muted);
+    opacity:1;
+  }
+
+  :is(.workspace,#utility-dialog) :is(input:not([type]),input[type="text"],input[type="number"],input[type="email"],input[type="password"],input[type="url"],input[type="search"],input[type="tel"],textarea,select):not(.resource-control input):not(:disabled):not([readonly]):hover {
+    background-color:var(--form-hover);
+    border-color:var(--form-ink);
+  }
+
+  :is(.workspace,#utility-dialog) :is(input:not([type]),input[type="text"],input[type="number"],input[type="email"],input[type="password"],input[type="url"],input[type="search"],input[type="tel"],textarea,select):not(.resource-control input):focus {
+    background-color:var(--form-focus);
+    border-color:var(--form-ink);
+    outline:2px solid var(--form-ink);
+    outline-offset:3px;
+    box-shadow:none;
+  }
+
+  :is(.workspace,#utility-dialog) :is(input,textarea,select):disabled {
+    opacity:.48;
+    cursor:not-allowed;
+  }
+
+  :is(.workspace,#utility-dialog) :is(input,textarea)[readonly] {
+    background-color:transparent;
+    border-image:none;
+    border-color:var(--form-rule);
+    color:var(--muted);
+  }
+
+  /* The browser still owns the menu, keyboard navigation, search and options. */
+  :is(.workspace,#utility-dialog) select {
+    -webkit-appearance:none;
+    appearance:none;
+    padding-inline-end:36px;
+    background-image:var(--form-arrow),linear-gradient(var(--form-rule),var(--form-rule));
+    background-repeat:no-repeat;
+    background-position:right 9px center,right 32px center;
+    background-size:18px 13px,1px 48%;
+    cursor:pointer;
+    text-overflow:ellipsis;
+  }
+
+  :is(.workspace,#utility-dialog) select[multiple],
+  :is(.workspace,#utility-dialog) select[size]:not([size="1"]) {
+    padding-inline-end:8px;
+    background-image:none;
+  }
+
+  :is(.workspace,#utility-dialog) select option {
+    color:var(--form-ink);
+    background:var(--form-paper);
+    font-family:Lusitana,Georgia,serif;
+  }
+
+  /* Pen strokes replace the system's rounded check marks. */
+  :is(.workspace,#utility-dialog) input[type="checkbox"] {
+    -webkit-appearance:none;
+    appearance:none;
+    position:relative;
+    display:inline-block;
+    width:17px;
+    height:17px;
+    min-width:17px;
+    min-height:0;
+    flex:0 0 17px;
+    padding:0;
+    border:1px solid var(--form-edge);
+    border-image:var(--form-frame) 5 / 2px / 0 stretch;
+    border-radius:0;
+    background:var(--form-paper);
+    box-shadow:none;
+    vertical-align:middle;
+    cursor:pointer;
+    transition:background-color .12s ease;
+  }
+
+  :is(.workspace,#utility-dialog) input[type="checkbox"]:checked {
+    border-color:var(--form-ink);
+    background-color:var(--form-check-fill);
+    background-image:var(--form-check);
+    background-repeat:no-repeat;
+    background-position:center;
+    background-size:100% 100%;
+  }
+
+  :is(.workspace,#utility-dialog) input[type="checkbox"]:indeterminate {
+    background-color:var(--form-check-fill);
+    background-image:linear-gradient(var(--form-check-ink),var(--form-check-ink));
+    background-repeat:no-repeat;
+    background-size:9px 2px;
+    background-position:center;
+  }
+
+  :is(.workspace,#utility-dialog) input[type="radio"]:not(.key-choice input) {
+    -webkit-appearance:none;
+    appearance:none;
+    width:18px;
+    height:18px;
+    min-width:18px;
+    min-height:0;
+    flex:0 0 18px;
+    padding:0;
+    border:0;
+    border-image:none;
+    border-radius:0;
+    background:var(--form-diamond) center / 100% 100% no-repeat;
+    box-shadow:none;
+    cursor:pointer;
+  }
+
+  :is(.workspace,#utility-dialog) input[type="radio"]:not(.key-choice input):checked {
+    background-image:var(--form-diamond-checked);
+  }
+
+  :is(.workspace,#utility-dialog) :is(input[type="checkbox"],input[type="radio"]:not(.key-choice input)):not(:disabled):hover {
+    outline:1px solid var(--form-edge);
+    outline-offset:3px;
+  }
+
+  :is(.workspace,#utility-dialog) :is(input[type="checkbox"],input[type="radio"]:not(.key-choice input)):focus-visible {
+    outline:2px solid var(--form-ink);
+    outline-offset:4px;
+    box-shadow:none;
+  }
+
+  :is(.workspace,#utility-dialog) .haven-skills input[type="checkbox"] {
+    width:19px;
+    height:19px;
+    min-width:19px;
+    flex-basis:19px;
+  }
+
+  /* Small ruled frames distinguish calculated values and inset information. */
+  :is(.workspace,#utility-dialog) :is(.readout,.deed,.haven-row,.empty-state,.haven-empty,.quiet-callout,.inline-warning,.account-sync-status,.roll-result) {
+    border:1px solid var(--form-edge);
+    border-image:var(--form-frame) 5 / 2px / 0 stretch;
+    border-radius:0;
+    background-color:var(--form-paper);
+    background-image:repeating-linear-gradient(130deg,transparent 0,transparent 3px,var(--form-hatch) 3px,var(--form-hatch) 4px);
+    background-repeat:no-repeat;
+    background-position:right 5px top 5px;
+    background-size:30px 7px;
+    color:var(--form-ink);
+    box-shadow:none;
+  }
+
+  :is(.workspace,#utility-dialog) :is(.quiet-callout,.inline-warning,.roll-result) {
+    border-width:2px;
+    border-image-width:3px;
+  }
+
+  :is(.workspace,#utility-dialog) .account-sync-status {
+    border-inline-start:3px solid var(--form-ink);
+    border-image:none;
+  }
+
+  :is(.workspace,#utility-dialog) .readout {
+    background-position:right 4px bottom 3px;
+    background-size:16px 4px;
+  }
+
+  @media (prefers-reduced-motion:reduce) {
+    :is(.workspace,#utility-dialog) :is(input,textarea,select) {transition:none}
+  }
+
+  @media (forced-colors:active) {
+    :is(.workspace,#utility-dialog) :is(input,textarea,select,.readout,.deed,.haven-row,.empty-state,.haven-empty,.quiet-callout,.inline-warning,.account-sync-status,.roll-result) {
+      border-image:none;
+      border-color:CanvasText;
+      background:Canvas;
+      color:CanvasText;
+    }
+    :is(.workspace,#utility-dialog) :is(input[type="checkbox"],input[type="radio"]:not(.key-choice input),select) {
+      -webkit-appearance:auto;
+      appearance:auto;
+      background-image:none;
+    }
+    :is(.workspace,#utility-dialog) select {padding-inline-end:8px}
+    :is(.workspace,#utility-dialog) :is(input[type="checkbox"],input[type="radio"]:not(.key-choice input)):checked {
+      background:Canvas;
+    }
+  }
+}

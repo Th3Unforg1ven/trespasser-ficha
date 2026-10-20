@@ -14,7 +14,9 @@ Uma breve tela de carregamento acompanha a abertura dos registros. Personagens s
 
 **Idioma** em Configurações oferece **Automático (dispositivo)**, **Português** e **English**. Automático usa português quando o idioma principal do navegador é `pt` ou `pt-*`, e inglês nos demais casos. A preferência é independente por navegador e segue as telas inicial, de personagens e de refúgios. Trocar o idioma altera a interface, sem traduzir nomes, anotações e outros textos digitados ou alterar dados das fichas.
 
-O cabeçalho da capa mantém somente a versão à direita; os controles ficam à esquerda e o rodapé credita o GitHub e identifica o projeto como fan-made. O botão **Refúgios** na barra do personagem abre o outro registro com a mesma transição de carregamento.
+O cabeçalho da capa oferece **Apoie Trespasser**, ligado à página oficial do jogo no itch.io. Os controles ficam à esquerda e o rodapé credita o GitHub e identifica o projeto como fan-made. O botão **Refúgios** na barra do personagem abre o outro registro com a mesma transição de carregamento. Campos, listas, marcas de seleção e caixas de informação usam molduras e traços de tinta, nos temas claro e escuro.
+
+Cada título de recurso no topo abre uma explicação pelo indicador **?**, com o cálculo e os valores da ficha atual, os ajustes manuais e as páginas de referência. Dez PV é apenas a base no nível 1 com Might 0; Endurance começa em 10 + Spirit; a reserva diária de dados de recuperação acompanha a Endurance restante no descanso; Focus inicial é igual ao Skill bonus e pode crescer no combate; Resolve tem limite de 3. Alterar atributos ou máximos não restaura automaticamente os recursos atuais.
 
 O retrato do personagem tem importação PNG/JPEG/WebP, zoom e posição horizontal/vertical. O enquadramento é uma edição temporária até **Salvar retrato**. A imagem é convertida em uma cópia reduzida, de até 800 px, e armazenada dentro do JSON privado da ficha, acompanhando o salvamento online e a importação/exportação. O PDF mantém seus campos preenchíveis e inclui o retrato enquadrado em uma página própria. Não é criado um endereço público separado para a foto.
 

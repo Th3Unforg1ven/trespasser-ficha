@@ -163,6 +163,56 @@ test('changing interface language preserves the active sheet, section, cloud gat
   setLanguagePreference('pt');
 });
 
+test('resource help explains calculated HP, daily recovery pools, and uncapped Focus without editing the sheet',async()=>{
+  const character=model.createCharacter('Recursos preservados');
+  character.level=4;character.attributes.might=2;character.attributes.spirit=3;
+  character.bonuses.hp=5;character.resources.hp=6;
+  character.resources.endurance=4;character.resources.recoveryTotal=12;character.resources.recovery=8;
+  character.resources.focus=17;
+  const f=fixture({guest:character});await flush();
+  const before=JSON.stringify(f.app.getState().records),writes=f.writes.filter(([key])=>key===KEY).length;
+  const strip=f.elements.get('#resources').innerHTML;
+  assert.equal((strip.match(/data-resource-help=/g)||[]).length,5);
+  assert.match(strip,/max="40" data-field="resources.hp" value="6"/);
+  f.clickAction('',{resourceHelp:'hp'});
+  assert.match(f.elements.get('#dialog-content').innerHTML,/\(4 \+ 1\) × \(5 \+ 2\) \+ 5 = 40 PV/);
+  assert.match(f.elements.get('#dialog-content').innerHTML,/sem restaurar os PV atuais/);
+  assert.match(f.elements.get('#dialog-content').innerHTML,/45, 88–89/);
+  f.clickAction('',{resourceHelp:'recovery'});
+  assert.match(f.elements.get('#dialog-content').innerHTML,/8 de 12 dados d8/);
+  assert.match(f.elements.get('#dialog-content').innerHTML,/Endurance atual é 4/);
+  f.clickAction('',{resourceHelp:'focus'});
+  assert.match(f.elements.get('#dialog-content').innerHTML,/Skill 3 \+ ajuste 0 = 3 Focus/);
+  assert.match(f.elements.get('#dialog-content').innerHTML,/não define um máximo de Focus/);
+  setLanguagePreference('en');
+  assert.equal(f.elements.get('#dialog-title').textContent,'Focus');
+  assert.match(f.elements.get('#dialog-content').innerHTML,/The starting value is not a limit/);
+  assert.match(f.elements.get('#dialog-content').innerHTML,/Current recorded value: 17/);
+  assert.equal(JSON.stringify(f.app.getState().records),before);
+  assert.equal(f.writes.filter(([key])=>key===KEY).length,writes);
+  f.clickAction('',{resource:'focus',delta:'1'});
+  assert.equal(f.app.getState().records[0].resources.focus,18,'Focus can increase above its starting value and above ten');
+  setLanguagePreference('pt');
+});
+
+test('level-zero resource help explains Commoner rules while preserving stored values',async()=>{
+  const character=model.createCharacter();character.level=0;character.attributes.might=2;
+  character.resources.focus=17;character.resources.endurance=8;
+  const f=fixture({guest:character});await flush();
+  const before=JSON.stringify(f.app.getState().records);
+  f.clickAction('',{resourceHelp:'hp'});
+  assert.match(f.elements.get('#dialog-content').innerHTML,/\(0 \+ 1\) × \(5 \+ 2\) \+ 0 = 7 PV/);
+  assert.match(f.elements.get('#dialog-content').innerHTML,/morte imediata/);
+  for(const key of ['focus','endurance','recovery']){
+    f.clickAction('',{resourceHelp:key});
+    assert.match(f.elements.get('#dialog-content').innerHTML,/Commoners de nível 0 não têm/);
+    assert.match(f.elements.get('#dialog-content').innerHTML,/valores salvos são preservados/);
+  }
+  f.clickAction('',{resourceHelp:'resolve'});
+  assert.match(f.elements.get('#dialog-content').innerHTML,/habilita a partir do nível 1/);
+  assert.equal(JSON.stringify(f.app.getState().records),before);
+});
+
 test('portrait adjustments remain a draft until saved and are discarded when the account changes',async()=>{
   const f=fixture();await flush();
   const draft={dataUrl:portraitPng(),zoom:1.5,x:30,y:60};

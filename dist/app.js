@@ -10,7 +10,7 @@ import { icon, setButtonLabel, mountButtonIcons } from './icons.js?v=portrait-ui
 import { setupTheme } from './preferences.js?v=settings-1';
 import { setupThemeToggle } from './ui-shell.js?v=records-2';
 import { setupLanguage, getLanguage, t, languageSettingsMarkup, translateStatic } from './i18n.js';
-import { ui, bilingual, label as localLabel, formatError } from './i18n-character.js?v=portrait-ui-2';
+import { ui, bilingual, label as localLabel, formatError } from './i18n-character.js?v=ink-fields-1';
 import { importPortrait, portraitStyle } from './portrait.js';
 
 setupLanguage({document,window,navigator});
@@ -30,7 +30,7 @@ const tabs = [
   ['notes','Anotações','Journal','Diário da aventura e registros da mesa.','book']
 ];
 let records = [], activeId, tab = 'character', saveError = false, rollHistory = [];
-let exportBusy = false, dialogVersion = 0, exportUrls = [];
+let exportBusy = false, dialogVersion = 0, exportUrls = [], resourceHelpKey = null;
 let cloudConnection, cloudUser = null, cloudEngine = null, cloudGeneration = 0;
 let cloudReady = false, cloudPlaceholderId = null, cloudSyncTimer, cloudPollTimer;
 let cloudStatus = { state:'local', pending:0 }, authReady = false, authBusy = false, accountProblem = '';
@@ -357,10 +357,55 @@ function choosePortrait() {
   $('#portrait-file').value='';$('#portrait-file').click();
 }
 
+const resourceNames={hp:'Pontos de vida',recovery:'Dados de recuperação',endurance:'Resistência',focus:'Foco',resolve:'Determinação'};
+function showResourceHelp(key) {
+  if(!Object.hasOwn(resourceNames,key))return;
+  const c=current(),d=derive(c),a=c.attributes,b=c.bonuses;
+  const paragraph=text=>`<p>${esc(text)}</p>`;
+  const formula=text=>`<p class="resource-guide-formula">${esc(text)}</p>`;
+  const currentValue=d.commoner&&key!=='hp'?0:c.resources[key];
+  let content='',pages='';
+  if(key==='hp'){
+    pages=d.commoner?'45, 86':'45, 88–89';
+    content=formula(t('Máximo: ({level} + 1) × (5 + {might}) + {bonus} = {total} PV.',{level:c.level,might:a.might,bonus:b.hp,total:d.hpMax}));
+    content+=paragraph(t('O máximo cresce com o nível e Might. Dez é apenas a base de um personagem de nível 1 com Might 0 e sem ajustes.'));
+    content+=paragraph(t('Bônus de vocação, como Fortitude, talentos, itens e efeitos entram em Combate → Ajustes de regras → PV máximos. Alterar nível, atributos ou ajustes recalcula o máximo, sem restaurar os PV atuais.'));
+    if(d.commoner)content+=paragraph(t('No nível 0, o Commoner tem 5 + Might PV. Chegar a 0 PV causa morte imediata, sem teste de Tenacity; recupera PV com descanso de uma semana.'));
+  } else if(d.commoner){
+    pages=key==='resolve'?'44, 86':'86';
+    content=paragraph(t(key==='resolve'?'Resolve é um recurso de trespassers (p. 44). Este registro o habilita a partir do nível 1.':'Commoners de nível 0 não têm Endurance, dados de recuperação ou Focus. Esses recursos são habilitados a partir do nível 1.'));
+    content+=paragraph(t('Os valores salvos são preservados ao mudar de nível; a ficha não os restaura automaticamente.'));
+  } else if(key==='recovery'){
+    pages='23–24, 45';
+    content=formula(t('Disponíveis: {current} de {total} dados {die}.',{current:c.resources.recovery,total:d.recoveryMax,die:d.skillDie}));
+    content+=paragraph(t('O total é uma reserva diária: após o descanso noturno, você perde os dados restantes e recebe tantos dados quanto sua Endurance atual. O tamanho de cada dado é seu Skill die.'));
+    content+=paragraph(t('A reserva registrada é {total}; a Endurance atual é {endurance}. Reduzir Endurance durante o dia não altera retroativamente essa reserva.',{total:d.recoveryMax,endurance:c.resources.endurance}));
+    content+=paragraph(t('Use Combate → Descanso noturno para renovar a reserva depois de resolver o descanso na mesa. Para corrigir um registro, use Combate → Ajustes de regras → Total de dados de recuperação. Com Endurance 0, o descanso noturno não recupera PV nem dados.'));
+  } else if(key==='endurance'){
+    pages='23–24';
+    content=formula(t('Máximo: 10 + Spirit {spirit} + ajuste {bonus} = {total}.',{spirit:a.spirit,bonus:b.endurance,total:d.enduranceMax}));
+    content+=paragraph(t('Endurance diminui com fome, esforço, magia e outros perigos. O descanso noturno usa a Endurance restante para renovar os dados de recuperação; não restaura a própria Endurance.'));
+    content+=paragraph(t('Uma semana de descanso no refúgio restaura Endurance, PV e dados de recuperação. Registre essa recuperação depois de resolvê-la na mesa. Ajustes adicionais ficam em Combate → Ajustes de regras → Endurance máx.'));
+  } else if(key==='focus'){
+    pages='11, 44';
+    content=formula(t('Início do combate: Skill {skill} + ajuste {bonus} = {total} Focus.',{skill:d.skill,bonus:b.focus,total:d.focusStart}));
+    content+=paragraph(t('O livro não define um máximo de Focus: você pode ganhar mais durante o combate. O valor inicial não é um limite, e o excesso não é levado para o combate seguinte.'));
+    content+=paragraph(t('Use Combate → Iniciar combate depois de ter um ou dois minutos para recuperar o fôlego. Esse botão prepara o Focus inicial, mantendo as marcas de custo dos feitos. Ajustes do valor inicial ficam em Combate → Ajustes de regras → Foco inicial.'));
+    content+=paragraph(t('Ao terminar seu turno sem tentar um feito heavy, mighty ou special, ganhe Focus igual ao Skill bonus. Atualize esse ganho na ficha conforme a mesa. Skill: +2 nos níveis 0–2, +3 em 3–5, +4 em 6–8 e +5 no nível 9.'));
+  } else if(key==='resolve'){
+    pages='44';
+    content=formula(t('Máximo: 3 Resolve.'));
+    content+=paragraph(t('O limite de três é uma regra fixa. Você pode ganhar Resolve no início do dia com Endurance abaixo da metade, por ferimentos, ao presenciar a morte de um aliado ou por uma striking success de um aliado, conforme a mesa.'));
+    content+=paragraph(t('Uma vez por turno, gaste 1 Resolve para obter 1 AP extra, ganhar 2 Focus ou tentar um segundo feito. Após a primeira semana de descanso ao retornar ao refúgio, Resolve volta a 0. Registre esses ganhos e gastos manualmente.'));
+  }
+  const summary=t('Valor atual registrado: {value}.',{value:currentValue});
+  showDialog(t(resourceNames[key]),`<div class="resource-guide"><p class="resource-guide-summary">${esc(summary)}</p>${content}<p class="panel-note resource-guide-source">${esc(t('Fonte: Trespasser v2.1.3, pp. {pages}.',{pages}))}</p></div>`);
+  resourceHelpKey=key;
+}
 function renderResources() {
   const c=current(),d=derive(c);
   const definitions=[['hp',t('Pontos de vida'),'Hit points',d.hpMax,'red'],['recovery',t('Dados de recuperação'),'Recovery dice',d.recoveryMax,'ochre'],['endurance',t('Resistência'),'Endurance',d.enduranceMax,'green'],['focus',t('Foco'),'Focus',null,'green'],['resolve',t('Determinação'),'Resolve',d.commoner?0:3,'ochre']];
-  $('#resources').innerHTML=ui`<section class="resource-strip" aria-label="Recursos do personagem">${definitions.map(([key,pt,en,max,color])=>ui`<div class="resource ${color} ${d.commoner&&key!=='hp'?'unavailable':''}"><div class="resource-label">${bilingual(pt,en)}</div><div class="resource-control"><button class="step-button" data-resource="${key}" data-delta="-1" aria-label="${esc(t('Diminuir {name}',{name:t(pt)}))}" ${d.commoner&&key!=='hp'?'disabled':''}>−</button><label><span class="sr-only">${t('{name} atuais',{name:t(pt)})}</span><input type="number" min="0" max="${max??1000000000}" data-field="resources.${key}" value="${d.commoner&&key!=='hp'?0:c.resources[key]}" ${d.commoner&&key!=='hp'?'disabled':''}></label><span class="resource-max">${max!==null?ui`/ ${max}`:t('atual')}</span><button class="step-button" data-resource="${key}" data-delta="1" aria-label="${esc(t('Aumentar {name}',{name:t(pt)}))}" ${d.commoner&&key!=='hp'?'disabled':''}>+</button></div><div class="resource-track"><i style="width:${max>0?Math.min(100,Math.max(0,c.resources[key]/max*100)):0}%"></i></div></div>`).join('')}</section>`;
+  $('#resources').innerHTML=ui`<section class="resource-strip" aria-label="Recursos do personagem">${definitions.map(([key,pt,en,max,color])=>ui`<div class="resource ${color} ${d.commoner&&key!=='hp'?'unavailable':''}"><button type="button" class="resource-label resource-help" data-resource-help="${key}" aria-label="${esc(t('Entender {name}',{name:t(pt)}))}" title="${esc(t('Entender {name}',{name:t(pt)}))}"><span>${bilingual(pt,en)}</span><span class="resource-help-mark" aria-hidden="true">?</span></button><div class="resource-control"><button class="step-button" data-resource="${key}" data-delta="-1" aria-label="${esc(t('Diminuir {name}',{name:t(pt)}))}" ${d.commoner&&key!=='hp'?'disabled':''}>−</button><label><span class="sr-only">${t('{name} atuais',{name:t(pt)})}</span><input type="number" min="0" max="${max??1000000000}" data-field="resources.${key}" value="${d.commoner&&key!=='hp'?0:c.resources[key]}" ${d.commoner&&key!=='hp'?'disabled':''}></label><span class="resource-max">${max!==null?ui`/ ${max}`:t('atual')}</span><button class="step-button" data-resource="${key}" data-delta="1" aria-label="${esc(t('Aumentar {name}',{name:t(pt)}))}" ${d.commoner&&key!=='hp'?'disabled':''}>+</button></div><div class="resource-track"><i style="width:${max>0?Math.min(100,Math.max(0,c.resources[key]/max*100)):0}%"></i></div></div>`).join('')}</section>`;
 }
 function characterPage() {
   const c=current(),d=derive(c);
@@ -408,7 +453,7 @@ function retireExportUrls() {
   // Give any download already handed to the browser time to read its Blob.
   if (retired.length) setTimeout(()=>retired.forEach(url=>URL.revokeObjectURL(url)),60_000);
 }
-function invalidateDialog() { dialogVersion += 1; retireExportUrls(); }
+function invalidateDialog() { dialogVersion += 1; resourceHelpKey=null; retireExportUrls(); }
 function showDialog(title,content) {
   accountDialogActive=false;onboardingDialogActive=false;portraitDraft=null;portraitOwner=null;
   invalidateDialog();
@@ -514,6 +559,7 @@ document.addEventListener('change',e=>{
 document.addEventListener('click',e=>{
   const el=e.target.closest('button'); if(!el)return;
   const c=current(),d=derive(c);
+  if(el.dataset.resourceHelp){showResourceHelp(el.dataset.resourceHelp);return;}
   if(el.dataset.tab){ tab=el.dataset.tab;render();$('#section-title').setAttribute('tabindex','-1');$('#section-title').focus({preventScroll:true});return; }
   if(el.dataset.character){activeId=el.dataset.character;save();render();document.querySelector('[data-field="name"]')?.focus({preventScroll:true});return;}
   if(el.dataset.resource){const k=el.dataset.resource;const max={hp:d.hpMax,recovery:d.recoveryMax,endurance:d.enduranceMax,resolve:3}[k]??1000000000;c.resources[k]=Math.max(0,Math.min(max,c.resources[k]+Number(el.dataset.delta)));save();renderResources();return;}
@@ -627,11 +673,13 @@ $('#portrait-file').addEventListener('change',async event=>{
   }
 });
 window.addEventListener('trespasser:language',()=>{
+  const openResourceHelp=resourceHelpKey;
   const languageFocused=document.activeElement?.matches?.('[data-language-preference]');
   translateStatic(document);render();updateAccountControls(true);
   if(cloudUser)setSaveStatus(cloudStatusLabel(),cloudStatus.state);
   else setSaveStatus(saveError?'Salvamento indisponível · exporte uma cópia':'Salvo neste navegador',saveError?'error':'local');
   if(portraitDraft&&$('#utility-dialog').open)showPortraitEditor(portraitDraft);
+  if(openResourceHelp&&$('#utility-dialog').open)showResourceHelp(openResourceHelp);
   if(languageFocused)document.querySelector('[data-language-preference]')?.focus({preventScroll:true});
 });
 

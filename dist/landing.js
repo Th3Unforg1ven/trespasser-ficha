@@ -2,7 +2,9 @@ import { mountButtonIcons } from './icons.js?v=records-2';
 import { consumeHavenReturn } from './auth-return.js';
 import { createPageTransition } from './ui-shell.js?v=records-2';
 import { setupLandingArt } from './landing-art.js?v=panorama-1';
-import { setupLanguage, t } from './i18n.js';
+import { setupLanguage, t, registerMessages } from './i18n.js';
+
+registerMessages({'Apoie Trespasser':'Support Trespasser'});
 
 const VIEW_KEY='trespasser.view.v1';
 
