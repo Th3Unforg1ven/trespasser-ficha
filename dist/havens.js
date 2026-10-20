@@ -6,7 +6,7 @@ import { acquireAccountLock } from './account-lock.js';
 import { setupTheme } from './preferences.js?v=settings-1';
 import { icon, mountButtonIcons } from './icons.js?v=ink-1';
 import { preparePrint } from './print.js';
-import { rememberHavenReturn } from './auth-return.js';
+import { setupThemeToggle, createPageTransition } from './ui-shell.js?v=onboarding-1';
 
 export const HAVEN_KEY = 'trespasser.havens.v1';
 const clone = value => structuredClone(value);
@@ -22,7 +22,7 @@ export function createHavenController({ storage, sessionStorage, locks, location
   timers = globalThis, onChange = () => {}, onToast = () => {} } = {}) {
   let records = [], activeId, readError = false, localUnsaved = false;
   let user = null, connection, engine, generation = 0, authRevision = 0;
-  let ready = false, authBusy = false, loading = false, cloudReady = false;
+  let ready = false, sessionChecked = false, authBusy = false, loading = false, cloudReady = false;
   let placeholderId = null, lockHandle, syncTimer, pollTimer, verificationTimer, subscription;
   let problem = '', blocked = '', editError = '', status = { state:'local', pending:0, localSaved:true };
   let guestBackup, migrationSession = new Set();
@@ -61,7 +61,7 @@ export function createHavenController({ storage, sessionStorage, locks, location
   }
   function getState() {
     return { records:clone(records), activeId, user:user ? {id:user.id,email:user.email} : null,
-      ready, authBusy, loading, cloudReady, blocked, problem, status:{...status},
+      ready, sessionChecked, authBusy, loading, cloudReady, blocked, problem, status:{...status},
       statusLabel:statusLabel(), canEdit:!loading && !blocked, unsafe:unsafe() || !user && localUnsaved,
       canLogout:!authBusy && !unsafe(), migrationCount:candidates().length };
   }
@@ -148,14 +148,17 @@ export function createHavenController({ storage, sessionStorage, locks, location
     verificationTimer=timers.setTimeout(()=>{if(!ready){ready=true;problem='A verificação da sessão está demorando. Você pode tentar entrar novamente.';emit('account');}},20000);
     try {
       connection=makeConnection({...cloudConfig,table:'trespasser_havens',rpc:'trespasser_save_haven'});
-      subscription=connection.auth.onAuthStateChange((_event,session)=>{
+      subscription=connection.auth.onAuthStateChange((event,session)=>{
+        // INITIAL_SESSION may be empty after a verification failure. Wait for
+        // getSession's successful result before treating a visitor as signed out.
+        if(!session?.user&&event!=='SIGNED_OUT')return;
         const revision=++authRevision;
-        timers.setTimeout(()=>{if(revision===authRevision){ready=true;problem='';void attachSession(session);}},0);
+        timers.setTimeout(()=>{if(revision===authRevision){ready=true;sessionChecked=Boolean(session?.user)||event==='SIGNED_OUT';problem='';void attachSession(session);}},0);
       })?.data?.subscription;
       const revision=authRevision;
       const {data,error}=await connection.auth.getSession();
       if(error)throw error;
-      if(revision===authRevision){ready=true;problem='';await attachSession(data.session);}
+      if(revision===authRevision){ready=true;sessionChecked=true;problem='';await attachSession(data.session);}
     } catch {ready=true;if(!user){problem='Não foi possível verificar sua sessão. Você pode tentar entrar novamente.';emit('account');}}
     finally {timers.clearTimeout(verificationTimer);}
   }
@@ -164,7 +167,6 @@ export function createHavenController({ storage, sessionStorage, locks, location
     const owner=generation;
     authBusy=true;problem='';emit('account');
     try {
-      rememberHavenReturn(sessionStorage);
       const redirectTo=new URL('./',location.href);redirectTo.search='';redirectTo.hash='';
       const {error}=await connection.auth.signInWithOAuth({provider:'google',options:{redirectTo:redirectTo.href}});
       if(error)throw error;
@@ -236,6 +238,10 @@ const signed = number => Number(number)>0 ? `+${number}` : String(number ?? 0);
 export function setupHavenPage({document,window,localStorage,sessionStorage,navigator,location},dependencies={}) {
   const $ = selector => document.querySelector(selector);
   const theme = setupTheme({document,window,localStorage});
+  const themeToggle = setupThemeToggle({document,window,theme});
+  const transition = createPageTransition({document,window});
+  const finishInitialLoading = transition.start({label:'Abrindo refúgios…'});
+  let returningToEntry = false;
   let state,tab='refuge',dialogVersion=0,settingsOpen=false,exportBusy=false,urls=[],toastTimer,cleanupPrint;
   function toast(message,long=false){$('#toast').textContent=message;$('#toast').hidden=false;window.clearTimeout(toastTimer);toastTimer=window.setTimeout(()=>{$('#toast').hidden=true;},long?9000:4000);}
   const controller=createHavenController({storage:localStorage,sessionStorage,locks:navigator.locks,location,
@@ -247,6 +253,14 @@ export function setupHavenPage({document,window,localStorage,sessionStorage,navi
       if(!['edit','status','account'].includes(reason))render();else if(reason==='edit')refreshComputed();
       refreshStatus();
       if((reason==='account'||accountControlsChanged)&&settingsOpen&&$('#utility-dialog').open)refreshSettings();
+      if(state.ready&&!state.loading){
+        finishInitialLoading();
+        // Only a confirmed signed-out session returns to the public entry.
+        // Verification failures stay visible so cached edits remain accessible.
+        if(state.sessionChecked&&!state.user&&!state.unsafe&&!returningToEntry){
+          returningToEntry=true;location.replace(new URL('./#inicio',location.href).href);
+        }
+      }
     }});
   state=controller.getState();
   const current = () => state.records.find(item=>item.id===state.activeId);
@@ -313,9 +327,12 @@ export function setupHavenPage({document,window,localStorage,sessionStorage,navi
   function refreshStatus() {
     $('#breadcrumb-name').textContent=current().name||'Novo refúgio';
     $('#save-status').textContent=state.statusLabel;$('#save-status').dataset.state=state.user?state.status.state:state.unsafe?'error':'local';
-    $('#main').inert=!state.canEdit;$('#main').setAttribute('aria-busy',String(state.loading));
-    for(const selector of ['#new-haven','#import-button','#haven-select','#manage-haven'])$(selector).disabled=!state.canEdit;
-    $('#export-button').disabled=exportBusy||state.loading||Boolean(state.user&&!state.cloudReady);$('#export-button').setAttribute('aria-busy',String(exportBusy));
+    $('#main').inert=!state.ready||!state.user||!state.canEdit;$('#main').setAttribute('aria-busy',String(!state.ready||state.loading));
+    for(const selector of ['#new-haven','#import-button','#haven-select','#manage-haven'])$(selector).disabled=!state.ready||!state.user||!state.canEdit;
+    $('#export-button').disabled=exportBusy||!state.ready||state.loading||Boolean(state.user&&!state.cloudReady);$('#export-button').setAttribute('aria-busy',String(exportBusy));
+    const entryStatus=$('#haven-entry-status');
+    const entryMessage=state.problem||state.blocked||(state.sessionChecked&&!state.user&&state.unsafe?'Há uma cópia que não foi salva. Exporte-a antes de sair desta página.':'');
+    entryStatus.hidden=!entryMessage;entryStatus.textContent=entryMessage;
     if(settingsOpen&&$('#utility-dialog').open){const status=$('#dialog-content .account-sync-status');if(status)status.textContent=state.statusLabel;}
   }
   function retireUrls(){const old=urls;urls=[];if(old.length)window.setTimeout(()=>old.forEach(url=>URL.revokeObjectURL(url)),60000);}
@@ -327,7 +344,7 @@ export function setupHavenPage({document,window,localStorage,sessionStorage,navi
     let account='';
     const problem=state.problem?`<p class="inline-warning" role="alert">${esc(state.problem)}</p>`:'';
     if(!state.ready)account='<p role="status">Verificando sua conta…</p>';
-    else if(!state.user)account=`<p>Entre com a mesma conta Google em seus dispositivos para acessar seus refúgios privados.</p>${problem}<div class="dialog-actions"><button type="button" class="button primary" data-action="login" data-icon="helm" ${state.authBusy?'disabled aria-busy="true"':''}>${state.authBusy?'Abrindo login…':'Entrar com Google'}</button></div><p class="panel-note">Sem entrar, seus refúgios ficam apenas neste navegador.</p>`;
+    else if(!state.user)account=`<p>Entre pela tela inicial para acessar seus refúgios privados em seus dispositivos.</p>${problem}<div class="dialog-actions"><a class="button primary" href="./#inicio" data-icon="gate"><span class="button-label">Ir para início</span></a></div><p class="panel-note">As cópias existentes neste navegador são preservadas.</p>`;
     else account=`<p class="account-identity"><span class="eyebrow">SUA CONTA</span><strong>${esc(state.user.email||'Conta conectada')}</strong></p><p>Refúgios e personagens compartilham a conta. Os registros são privados.</p><p class="account-sync-status" role="status">${esc(state.statusLabel)}</p>${problem}<div class="dialog-actions"><button type="button" class="button" data-action="logout" data-icon="logout" ${!state.canLogout?'disabled':''}>Sair deste dispositivo</button>${state.unsafe?'<button type="button" class="button" data-action="export" data-icon="export">Exportar uma cópia</button>':''}</div>${state.migrationCount?`<div class="local-migration"><h3>Refúgios deste navegador</h3><p>Você pode copiar ${state.migrationCount} ${state.migrationCount===1?'refúgio local':'refúgios locais'} para esta conta. A cópia local será mantida.</p><button type="button" class="button" data-action="migrate" data-icon="import" ${!state.cloudReady||state.authBusy?'disabled':''}>Salvar meus refúgios locais na conta</button></div>`:''}<p class="panel-note">${state.unsafe?'Há edições que não foram guardadas. Exporte uma cópia e mantenha a página aberta.':state.status.pending?'Alterações pendentes ficam neste navegador para sincronizar quando você entrar novamente.':'O salvamento é automático. PDF e JSON são cópias independentes.'}</p>`;
     return `<section class="settings-appearance" aria-labelledby="appearance-title"><h3 id="appearance-title">Aparência</h3><div class="settings-themes" role="group" aria-label="Tema da ficha">${choices.map(([value,label,symbol])=>`<button type="button" class="button" data-icon="${symbol}" data-action="theme" data-theme-value="${value}" aria-pressed="${theme.getPreference()===value}">${label}</button>`).join('')}</div><p class="panel-note">Automático acompanha o tema do dispositivo. A escolha fica salva neste navegador.</p></section><section class="settings-section"><h3>Conta</h3>${account}</section>`;
   }
@@ -421,7 +438,7 @@ export function setupHavenPage({document,window,localStorage,sessionStorage,navi
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)void controller.sync();});
   window.addEventListener('storage',event=>{if(event.key===HAVEN_KEY&&!state.user){controller.externalGuestChange();toast('O registro mudou em outra aba. Exporte sua versão e recarregue.',true);}});
   window.addEventListener('beforeunload',event=>{if(state.unsafe){event.preventDefault();event.returnValue='';}});
-  window.addEventListener('pagehide',()=>controller.dispose());
+  window.addEventListener('pagehide',()=>{controller.dispose();themeToggle.dispose();transition.dispose();});
   window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();});
   window.addEventListener('beforeprint',()=>{cleanupPrint=preparePrint($('#main'));});
   window.addEventListener('afterprint',()=>{cleanupPrint?.();cleanupPrint=null;});

@@ -8,8 +8,10 @@ import { isPristineCharacter, localMigrationCandidates, mergeLocalCharacters } f
 import { acquireAccountLock } from './account-lock.js';
 import { icon, setButtonLabel, mountButtonIcons } from './icons.js?v=ink-1';
 import { setupTheme } from './preferences.js?v=settings-1';
+import { setupThemeToggle } from './ui-shell.js?v=onboarding-1';
 
 const theme=setupTheme({document,window});
+setupThemeToggle({document,window,theme});
 
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -26,7 +28,7 @@ let exportBusy = false, dialogVersion = 0, exportUrls = [];
 let cloudConnection, cloudUser = null, cloudEngine = null, cloudGeneration = 0;
 let cloudReady = false, cloudPlaceholderId = null, cloudSyncTimer, cloudPollTimer;
 let cloudStatus = { state:'local', pending:0 }, authReady = false, authBusy = false, accountProblem = '';
-let accountDialogActive = false, authEventRevision = 0, guestBackup;
+let accountDialogActive = false, onboardingDialogActive = false, authEventRevision = 0, guestBackup;
 let migrationSessionIds = new Set();
 let cloudEditError = '';
 let cloudAccountLock = null, cloudBlockedReason = '';
@@ -121,11 +123,23 @@ function accountContent() {
   return `<p class="account-identity"><span class="eyebrow">SUA CONTA</span><strong>${esc(cloudUser.email||'Conta conectada')}</strong></p><p>Suas fichas ficam privadas nesta conta. Entre com o mesmo Google em outro dispositivo para continuar a edição.</p><p class="account-sync-status" role="status">${esc(cloudStatusLabel())}</p>${problem}<div class="dialog-actions account-actions"><button class="button" data-icon="logout" data-action="cloud-logout" ${authBusy||cloudEditError||unsafe?'disabled':''} ${authBusy?'aria-busy="true"':''}>Sair deste dispositivo</button>${cloudEditError||unsafe?'<button class="button" data-icon="export" data-action="export">Exportar uma cópia</button>':''}</div>${local.length?`<div class="local-migration"><h3>Fichas deste navegador</h3><p>${local.length===1?'Há uma ficha local que você pode salvar':'Há '+local.length+' fichas locais que você pode salvar'} na sua conta. A cópia local será mantida.</p><button class="button" data-icon="import" data-action="cloud-migrate" ${!cloudReady||authBusy?'disabled':''}>Salvar minhas fichas locais na conta</button></div>`:''}<p class="panel-note">${cloudEditError?'Essas edições ainda não foram guardadas. Exporte uma cópia e reduza o conteúdo da ficha antes de sair.':unsafe?'As edições estão somente na memória desta página. Mantenha-a aberta até aparecer “Salvo online” ou exporte uma cópia.':cloudStatus.pending?'Há alterações pendentes. Se sair agora, elas ficam guardadas neste navegador para sincronizar quando você entrar novamente.':'O salvamento é automático. PDF e JSON continuam disponíveis como cópias independentes.'}</p>`;
 }
 function openAccountDialog() { showDialog('Configurações',settingsContent());accountDialogActive=true; }
+function onboardingContent() {
+  const problem=accountProblem?`<p class="inline-warning" role="alert">${esc(accountProblem)}</p>`:'';
+  return `<div class="onboarding-intro"><p>Guarde seus personagens e refúgios em uma conta e continue a aventura no celular ou no computador.</p><p>Use sua conta Google para entrar. No primeiro acesso, sua conta é criada automaticamente.</p></div>${problem}${!authReady?'<p role="status">Verificando seu acesso…</p>':''}${authReady&&!cloudConnection?'<p role="alert">O acesso ao Google está indisponível. Recarregue a página para tentar novamente.</p>':''}<div class="dialog-actions"><button type="button" class="button primary" data-icon="helm" data-action="cloud-login" ${!authReady||!cloudConnection||authBusy?'disabled':''} ${authBusy?'aria-busy="true"':''}>${authBusy?'Abrindo Google…':'Continuar com Google'}</button></div><p class="panel-note onboarding-note">Seus registros ficam privados na sua conta. PDF editável e JSON continuam disponíveis para exportar.</p>`;
+}
+function openOnboardingDialog() {
+  if(cloudUser)return;
+  showDialog('Entrar ou criar conta',onboardingContent());onboardingDialogActive=true;
+}
 function updateAccountControls(refreshDialog=false) {
   const button=$('#account-button');
   setButtonLabel(button,'Ajustes','settings');
   button.title='Configurações';
-  window.dispatchEvent(new CustomEvent('trespasser:account',{detail:{signedIn:Boolean(cloudUser),ready:authReady}}));
+  window.dispatchEvent(new CustomEvent('trespasser:account',{detail:{signedIn:Boolean(cloudUser),ready:authReady,recordsReady:cloudReady,loading:Boolean(cloudUser&&!cloudReady&&!cloudBlockedReason),blocked:Boolean(cloudBlockedReason),message:accountProblem||cloudBlockedReason||''}}));
+  if(onboardingDialogActive && $('#utility-dialog').open) {
+    if(cloudUser)closeDialog();
+    else if(refreshDialog){$('#dialog-content').innerHTML=onboardingContent();mountButtonIcons($('#dialog-content'));}
+  }
   if (accountDialogActive && $('#utility-dialog').open) {
     if (refreshDialog) { $('#dialog-title').textContent='Configurações';$('#dialog-content').innerHTML=settingsContent();mountButtonIcons($('#dialog-content')); }
     else {
@@ -182,7 +196,7 @@ function restoreGuest() {
 async function attachSession(session) {
   const user=session?.user||null;
   if ((user?.id||null)===(cloudUser?.id||null)) { if(user)cloudUser=user;updateAccountControls(true);return; }
-  if ($('#utility-dialog').open&&!accountDialogActive) closeDialog();
+  if ($('#utility-dialog').open) closeDialog();
   if (!cloudUser) guestBackup={records:structuredClone(records),activeId,saveError};
   stopCloud();cloudUser=user;authBusy=false;accountProblem='';migrationSessionIds=new Set();
   if (!user) {setCloudLoading(false);restoreGuest();updateAccountControls(true);return;}
@@ -196,14 +210,12 @@ async function attachSession(session) {
     if(generation!==cloudGeneration)return;
     cloudBlockedReason=error.code==='ACCOUNT_LOCK_UNSUPPORTED'?error.message:'Não foi possível abrir esta conta com segurança. Recarregue a página ou use um navegador atualizado.';
     accountProblem=cloudBlockedReason;onCloudStatus({state:'error',pending:0,localSaved:true,message:cloudBlockedReason});updateAccountControls(true);
-    if(!$('#utility-dialog').open)openAccountDialog();
     return;
   }
   if(generation!==cloudGeneration){acquired?.release();return;}
   if(!acquired){
     cloudBlockedReason='Esta conta está aberta em outra aba. Feche-a e recarregue esta página.';
     accountProblem=cloudBlockedReason;onCloudStatus({state:'error',pending:0,localSaved:true,message:cloudBlockedReason});updateAccountControls(true);
-    if(!$('#utility-dialog').open)openAccountDialog();
     return;
   }
   cloudAccountLock=acquired;
@@ -217,7 +229,6 @@ async function attachSession(session) {
     if (generation!==cloudGeneration) return;
     cloudReady=true;setCloudLoading(false);onCloudStatus(cloudStatus);updateAccountControls(true);
     cloudPollTimer=setInterval(()=>{if(!document.hidden)syncCloud();},15000);
-    if (pendingLocalCharacters().length && !$('#utility-dialog').open) openAccountDialog();
   } catch {
     if(generation!==cloudGeneration)return;
     cloudReady=true;setCloudLoading(false);onCloudStatus({state:'error',pending:0,message:'Não foi possível sincronizar. Suas edições ficam neste dispositivo; tente novamente.'});updateAccountControls(true);
@@ -231,7 +242,8 @@ async function initializeCloud() {
   try {
     cloudConnection=createCloudClient(cloudConfig);
     // The auth callback stays synchronous; SDK calls happen after its lock is released.
-    cloudConnection.auth.onAuthStateChange((_event,session)=>{
+    cloudConnection.auth.onAuthStateChange((event,session)=>{
+      if(!session?.user&&event!=='SIGNED_OUT')return;
       const revision=++authEventRevision;
       setTimeout(()=>{if(revision===authEventRevision){authReady=true;accountProblem='';void attachSession(session);}},0);
     });
@@ -354,14 +366,14 @@ function retireExportUrls() {
 }
 function invalidateDialog() { dialogVersion += 1; retireExportUrls(); }
 function showDialog(title,content) {
-  accountDialogActive=false;
+  accountDialogActive=false;onboardingDialogActive=false;
   invalidateDialog();
   $('#dialog-title').textContent=title; $('#dialog-content').innerHTML=content;mountButtonIcons($('#dialog-content'));
   if (!$('#utility-dialog').open) $('#utility-dialog').showModal();
   syncExportButtons();
   return dialogVersion;
 }
-function closeDialog() { accountDialogActive=false;invalidateDialog(); $('#utility-dialog').close(); }
+function closeDialog() { accountDialogActive=false;onboardingDialogActive=false;invalidateDialog(); $('#utility-dialog').close(); }
 function syncExportButtons() {
   document.querySelectorAll('#export-button, [data-action="export"]').forEach(button=>{
     button.disabled=exportBusy || Boolean(cloudUser&&!cloudReady);
@@ -458,6 +470,7 @@ document.addEventListener('click',e=>{
   if(el.dataset.roll){openDice(el.dataset.roll);performRoll(el.dataset.roll);return;}
   if(el.dataset.useDeed!==undefined){const deed=c.deeds[Number(el.dataset.useDeed)],cost=Number(deed.cost)+Number(deed.focus);if(c.resources.focus<cost){toast('Foco insuficiente para este feito.');return;}c.resources.focus-=cost;if(['heavy','mighty'].includes(deed.kind))deed.focus=Math.min(10000,deed.focus+1);save();render();toast(`Feito usado: ${cost} foco gasto.`);return;}
   const action=el.dataset.action;
+  if(action==='onboarding'){openOnboardingDialog();return;}
   if(action==='cloud-account'){openAccountDialog();return;}
   if(action==='settings'){openAccountDialog();return;}
   if(action==='theme'){theme.setPreference(el.dataset.themeValue);refreshThemeControls();return;}

@@ -6,9 +6,11 @@ Ficha editável não oficial para Trespasser v2.1.3, em português com os termos
 
 [Abrir a ficha](https://th3unforg1ven.github.io/trespassercs/)
 
-Na tela inicial, escolha **Registro de Personagens** ou **Registro de Refúgios** para abrir o tipo de ficha. Entre com Google pelas **Configurações** para salvar suas fichas privadas na conta; use o mesmo Google no celular e no computador para continuar a edição. **Início** volta à tela com as ilustrações. Sem entrar, as fichas são salvas apenas neste navegador.
+Quem ainda não entrou vê uma apresentação do app e o botão **Começar**. Ele abre a janela **Entrar ou criar conta**, com acesso pelo Google. Depois de entrar, a tela inicial mostra **Registro de Personagens** e **Registro de Refúgios**. Use o mesmo Google no celular e no computador para continuar a edição. **Início** volta à tela com as ilustrações. Nenhum popup de configuração ou transferência de fichas é aberto automaticamente.
 
-O menu **Configurações**, acessível pela engrenagem da tela inicial ou por **Ajustes** na ficha, reúne aparência e conta, incluindo **Sair deste dispositivo**. Escolha **Claro**, **Modo escuro** ou **Automático**; a preferência acompanha este navegador e é independente das fichas. Automático segue a aparência do dispositivo. O modo escuro conserva o contraste e as molduras da ficha, enquanto impressão e PDF continuam em papel claro. O salvamento online é automático, sem botão de sincronização manual.
+O ícone no canto superior alterna diretamente entre modo claro e escuro na abertura e nos registros. O menu **Configurações**, acessível pela engrenagem da tela inicial conectada ou por **Ajustes** na ficha, reúne aparência e conta, incluindo **Sair deste dispositivo** e a opção de tema **Automático**. A preferência acompanha este navegador e é independente das fichas. Automático segue a aparência do dispositivo. O modo escuro conserva o contraste e as molduras da ficha, enquanto impressão e PDF continuam em papel claro. O salvamento online é automático, sem botão de sincronização manual.
+
+Uma breve tela de carregamento acompanha a abertura dos registros. Personagens só são exibidos depois de verificar a sessão e preparar os dados; refúgios também aguardam sua verificação inicial. A transição preserva o foco, respeita movimento reduzido e não mantém a interface bloqueada indefinidamente se a conexão falhar.
 
 Depois de entrar, use **Salvar minhas fichas locais na conta** para enviar personagens que já estavam neste endereço. A cópia local é mantida. Fichas de outro endereço, como localhost, podem ser importadas por JSON uma vez.
 
@@ -18,7 +20,7 @@ Depois de entrar, use **Salvar minhas fichas locais na conta** para enviar perso
 
 [Abrir os refúgios](https://th3unforg1ven.github.io/trespassercs/havens.html). A ficha de Haven inclui seis atributos, doze perícias, nível, grau de população, riqueza, despesas, chegadas e evento; construções e projetos com relógios; fortalezas, contratados, cadeias de produção, itens e anotações. As abas mantêm os títulos em português com os termos originais nos campos.
 
-O salvamento de refúgios é automático e separado dos personagens, com registros locais para visitantes e cache privado por conta para quem entra com Google. O mesmo login abre os refúgios em outros dispositivos. A cópia de refúgios locais para a conta exige uma ação explícita em Configurações. Exportar gera PDF preenchível e JSON; importar o JSON cria uma nova ficha.
+O salvamento de refúgios é automático e separado dos personagens, com cache privado por conta. O mesmo login abre os refúgios em outros dispositivos. Cópias locais anteriores permanecem preservadas; copiá-las para a conta exige uma ação explícita em Configurações. Exportar gera PDF preenchível e JSON; importar o JSON cria uma nova ficha.
 
 Bônus de perícia, espaços de construção, limites e despesas são calculados a partir dos valores registrados. Avanço de nível, efeitos de construções, manutenção, alterações de riqueza e consequências dos eventos são resolvidos na mesa. As taxas dos contratados podem ser ajustadas. A ficha usa a tabela de avanço 0–9 e as doze perícias listadas no livro e na folha oficial; não inventa entradas para as menções divergentes a nível 10 e quatorze perícias na prosa. Para artesão, cozinheiro e arauto, usa as taxas de 100 cp do livro, com ajuste manual disponível para mesas que adotam os 50 cp impressos na folha.
 

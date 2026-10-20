@@ -23,6 +23,11 @@ body[data-view="home"]{background:#080909;color:#f5f4ef}
 .landing.landing-montage .landing-content h2{font-family:'Pirata One',Georgia,serif;font-size:35px;line-height:1.1;font-weight:400;text-transform:none;letter-spacing:.2px;margin:0 0 13px}
 .landing.landing-montage .landing-description{max-width:580px;color:#d2d3c9;font-size:18px;line-height:1.5;margin:0 0 23px;text-wrap:balance}
 .landing.landing-montage .landing-actions{display:flex;justify-content:center;align-items:stretch;flex-wrap:wrap;width:auto;max-width:100%}
+.landing.landing-montage #landing-start-actions{min-width:min(100%,240px)}
+.landing.landing-montage #landing-start{width:100%}
+.landing.landing-montage #landing-register-actions{gap:12px}
+.landing.landing-montage #landing-register-actions[aria-busy="true"]{cursor:progress}
+.landing.landing-montage #landing-auth-status{font-family:Lusitana,Georgia,serif;font-size:13px;line-height:1.5;color:#d2d3c9;margin:14px 0 0;max-width:100%;text-align:center}
 .landing.landing-montage .landing-guest{align-self:center}
 .landing.landing-montage .landing-footer{justify-content:center;min-height:48px;padding-top:7px;padding-bottom:20px;color:#b0b3a5;text-align:center;font-size:8px;letter-spacing:1px}
 .landing-footer>p{margin:0}

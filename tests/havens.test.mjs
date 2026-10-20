@@ -6,7 +6,7 @@ import { createHaven } from '../dist/haven-model.js';
 const flush=async()=>{for(let count=0;count<60;count++)await Promise.resolve();};
 const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};};
 const session=id=>id?{user:{id,email:`${id}@example.test`}}:null;
-function fixture({guest,initial=null,deferredSession=false,deferredLogout=false,readFailure=false,lockResult=true}={}) {
+function fixture({guest,initial=null,deferredSession=false,deferredLogout=false,readFailure=false,lockResult=true,sessionError=false}={}) {
   const saved=new Map(),sessionSaved=new Map(),calls=[],pending=new Map(),rows=new Map(),releases=[];
   if(guest)saved.set(HAVEN_KEY,JSON.stringify({version:1,activeId:guest.id,havens:[guest]}));
   let authHandler,sequence=0,timerId=0,failCache=false;
@@ -36,7 +36,7 @@ function fixture({guest,initial=null,deferredSession=false,deferredLogout=false,
     makeConnection(config){calls.push({type:'config',config});return {
       auth:{
         onAuthStateChange(callback){authHandler=callback;return {data:{subscription:{unsubscribe(){calls.push({type:'unsubscribe'});}}}};},
-        async getSession(){return deferredSession?initialRequest.promise:{data:{session:session(initial)}};},
+        async getSession(){return deferredSession?initialRequest.promise:{data:{session:session(initial)},error:sessionError?new Error('Offline'):null};},
         async signInWithOAuth(options){calls.push({type:'login',options});return {error:null};},
         async signOut(options){calls.push({type:'logout',options});return deferredLogout?logoutRequest.promise:{error:null};},
       },adapter:{forUser:adapter},
@@ -45,7 +45,7 @@ function fixture({guest,initial=null,deferredSession=false,deferredLogout=false,
   const runTimers=async(delay=0)=>{for(const [id,timer] of [...pending])if(!timer.interval&&timer.delay<=delay){pending.delete(id);timer.callback();}await flush();};
   const seed=(id,haven)=>{rows.set(id,new Map([[haven.id,{id:haven.id,data:structuredClone(haven),revision:1,deleted_at:null}]]));};
   return {controller,saved,calls,rows,adapter,seed,releases,sessionSaved,initialRequest,logoutRequest,
-    initialize:()=>controller.initialize(),emit(id){authHandler('SIGNED_IN',session(id));},runTimers,
+    initialize:()=>controller.initialize(),emit(id,event='SIGNED_IN'){authHandler(event,session(id));},runTimers,
     failCache(){failCache=true;},
   };
 }
@@ -155,13 +155,11 @@ test('invalid edits roll back the active record and corrupt guest storage is pre
   f.controller.dispose();
 });
 
-test('OAuth returns through the authorized root with a fixed Haven destination only',async()=>{
+test('OAuth returns to the authorized home without automatically opening a record',async()=>{
   const f=fixture();await f.initialize();await f.controller.login();
   const call=f.calls.find(call=>call.type==='login');
   assert.deepEqual(call.options,{provider:'google',options:{redirectTo:'https://example.test/trespasser-ficha/'}});
-  const intent=JSON.parse(f.sessionSaved.get('trespasser.auth.destination.v1'));
-  assert.equal(intent.destination,'havens');assert.equal(typeof intent.createdAt,'number');
-  assert.equal(JSON.stringify(intent).includes('token'),false);
+  assert.equal(f.sessionSaved.has('trespasser.auth.destination.v1'),false);
   f.controller.dispose();
 });
 
@@ -203,11 +201,43 @@ test('a stalled initial session check releases the settings login and accepts a 
   const f=fixture({deferredSession:true});const initializing=f.initialize();
   assert.equal(f.controller.getState().ready,false);await f.runTimers(20000);
   assert.equal(f.controller.getState().ready,true);
+  assert.equal(f.controller.getState().sessionChecked,false);
   await f.controller.login();assert.equal(f.calls.some(call=>call.type==='login'),true);
   f.emit('later');await f.runTimers();assert.equal(f.controller.getState().user.id,'later');
+  assert.equal(f.controller.getState().sessionChecked,true);
   f.initialRequest.resolve({data:{session:null}});await initializing;
   assert.equal(f.controller.getState().user.id,'later');
   f.controller.dispose();
+});
+
+test('a verified guest is distinguishable from an unavailable session without changing local havens',async()=>{
+  const guest=createHaven('Cópia local'),verified=fixture({guest}),offline=fixture({guest,sessionError:true});
+  const original=verified.saved.get(HAVEN_KEY);
+  await verified.initialize();await offline.initialize();
+  assert.equal(verified.controller.getState().sessionChecked,true);
+  assert.equal(verified.controller.getState().user,null);
+  assert.equal(offline.controller.getState().ready,true);
+  assert.equal(offline.controller.getState().sessionChecked,false);
+  assert.match(offline.controller.getState().problem,/verificar sua sessão/);
+  assert.equal(verified.saved.get(HAVEN_KEY),original);
+  assert.equal(offline.saved.get(HAVEN_KEY),original);
+  assert.equal(offline.controller.getState().records[0].name,'Cópia local');
+  verified.controller.dispose();offline.controller.dispose();
+});
+
+test('an empty initial auth event cannot turn a failed session lookup into a confirmed signout',async()=>{
+  const f=fixture({deferredSession:true});const initializing=f.initialize();
+  f.emit(null,'INITIAL_SESSION');await f.runTimers();
+  assert.equal(f.controller.getState().sessionChecked,false);
+  f.initialRequest.resolve({data:{session:null},error:new Error('Offline')});await initializing;
+  assert.equal(f.controller.getState().sessionChecked,false);
+  assert.match(f.controller.getState().problem,/verificar sua sessão/);
+  f.controller.dispose();
+  const verified=fixture({deferredSession:true});const lookup=verified.initialize();
+  verified.emit(null,'INITIAL_SESSION');await verified.runTimers();
+  verified.initialRequest.resolve({data:{session:null}});await lookup;
+  assert.equal(verified.controller.getState().sessionChecked,true);
+  verified.controller.dispose();
 });
 
 test('a late signout result cannot detach a newer account received in another tab',async()=>{

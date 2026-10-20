@@ -13,7 +13,8 @@
   <link rel="stylesheet" href="./controls.css?v=ink-1">
   <link rel="stylesheet" href="./havens.css?v=havens-1">
   <link rel="stylesheet" href="./theme.css?v=settings-1">
-  <script type="module" src="./havens.js?v=havens-1"></script>
+  <link rel="stylesheet" href="./ui-shell.css?v=onboarding-1">
+  <script type="module" src="./havens.js?v=onboarding-1"></script>
 </head>
 <body class="haven-page">
   <a class="skip-link" href="#main">Ir para o refúgio</a>
@@ -29,9 +30,11 @@
           <button type="button" class="button" id="import-button" data-icon="import"><span class="button-label">Importar</span></button>
           <button type="button" class="button" id="export-button" data-icon="export"><span class="button-label">Exportar</span></button>
           <button type="button" class="button" id="account-button" data-icon="settings" aria-label="Configurações"><span class="button-label">Ajustes</span></button>
+          <button type="button" class="button icon-button theme-toggle" id="haven-theme-toggle" data-action="toggle-theme" data-icon="moon" aria-label="Ativar modo escuro" aria-pressed="false"><span class="button-label sr-only">Ativar modo escuro</span></button>
         </div>
       </div>
       <div class="record-status"><div class="breadcrumb">REFÚGIOS <span>/</span> <span id="breadcrumb-name">Novo refúgio</span></div><span id="save-status" role="status">Salvo neste navegador</span></div>
+      <p class="inline-warning" id="haven-entry-status" role="status" hidden></p>
       <div class="haven-picker"><label for="haven-select">Seus refúgios <small>Your havens</small></label><select id="haven-select" aria-label="Trocar refúgio"></select><button type="button" class="button" id="manage-haven" data-icon="record"><span class="button-label">Gerenciar</span></button></div>
     </header>
     <main id="main" tabindex="-1">

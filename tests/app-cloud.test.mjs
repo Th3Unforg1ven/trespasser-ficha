@@ -7,6 +7,7 @@ import { CloudSync } from '../dist/cloud-sync.js';
 import { acquireAccountLock } from '../dist/account-lock.js';
 import { icon, setButtonLabel, mountButtonIcons } from '../dist/icons.js';
 import { setupTheme } from '../dist/preferences.js';
+import { setupThemeToggle } from '../dist/ui-shell.js';
 
 const KEY='trespasser.record.v1';
 const appSource=(await readFile(new URL('../dist/app.js',import.meta.url),'utf8')).replace(/^import .*;\r?\n/gm,'');
@@ -48,14 +49,14 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
     addEventListener:(event,listener)=>documentListeners.set(event,listener)};
   for(const element of elements.values())element.ownerDocument=document;
   let nextTimer=0,authListener,resolveSession,authUser=initialUser,inCallback=false;
-  const timers=new Map(),intervals=new Map(),calls=[];
+  const timers=new Map(),intervals=new Map(),calls=[],events=[];
   const auth={
     onAuthStateChange(callback){authListener=callback;return{data:{subscription:{unsubscribe(){authListener=null;}}}};},
     getSession(){return deferredSession?new Promise(resolve=>{resolveSession=resolve;}):Promise.resolve({data:{session:session(initialUser)},error:null});},
     async signOut(){assert.equal(inCallback,false,'SDK auth calls must happen outside its callback lock');emit(null);return{error:null};},
     async signInWithOAuth(options){assert.equal(inCallback,false);calls.push({type:'login',options});return{error:null};}
   };
-  function emit(id){authUser=id;inCallback=true;try{authListener('SIGNED_IN',session(id));}finally{inCallback=false;}}
+  function emit(id){authUser=id;inCallback=true;try{authListener(id?'SIGNED_IN':'SIGNED_OUT',session(id));}finally{inCallback=false;}}
   const adapter={
     forUser(expectedUser){return{
       list(){assert.equal(authUser,expectedUser);return adapter.list();},
@@ -64,8 +65,8 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
     async list(){assert.equal(inCallback,false,'loading the account inside the SDK callback can deadlock');calls.push({type:'list',user:authUser});return structuredClone(remote.get(authUser)||[]);},
     async save(sent){assert.equal(inCallback,false);calls.push({type:'save',user:authUser});const rows=remote.get(authUser)||[];const old=rows.find(r=>r.id===sent.id);if((old?.revision||0)!==sent.revision)return null;const row={id:sent.id,data:structuredClone(sent.data),revision:sent.revision+1,deleted_at:sent.deleted?'2026-10-19T12:00:00Z':null};remote.set(authUser,[...rows.filter(r=>r.id!==row.id),row]);return row;}
   };
-  const window={localStorage,addEventListener(event,listener){const prior=windowListeners.get(event);windowListeners.set(event,prior?value=>{prior(value);listener(value);}:listener);},dispatchEvent:event=>windowListeners.get(event.type)?.(event)};
-  const dependencies={...model,...uiState,CloudSync,acquireAccountLock,icon,setButtonLabel,mountButtonIcons,setupTheme,createCloudClient:()=>({auth,adapter}),cloudConfig:{},navigator:{locks},
+  const window={localStorage,addEventListener(event,listener){const prior=windowListeners.get(event);windowListeners.set(event,prior?value=>{prior(value);listener(value);}:listener);},dispatchEvent:event=>{events.push(event);windowListeners.get(event.type)?.(event);}};
+  const dependencies={...model,...uiState,CloudSync,acquireAccountLock,icon,setButtonLabel,mountButtonIcons,setupTheme,setupThemeToggle,createCloudClient:()=>({auth,adapter}),cloudConfig:{},navigator:{locks},
     preparePrint(){},prepareExport(){throw new Error('Export is outside this auth test');},
     document,window,localStorage,location:{href:'https://example.test/trespasser-ficha/?ignored=1#ignored',reload(){calls.push({type:'reload'});}},
     setTimeout:(fn,delay)=>{const id=++nextTimer;timers.set(id,{fn,delay});return id;},clearTimeout:id=>timers.delete(id),
@@ -74,7 +75,7 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
   const app=run(...Object.values(dependencies));
   const runTimers=async(delay=0)=>{for(const[id,timer]of[...timers])if(timer.delay===delay){timers.delete(id);timer.fn();}await flush();};
   function edit(path,value){const target={dataset:{field:path},value,type:'text',matches:selector=>selector==='[data-field]'};documentListeners.get('input')({target});}
-  return{app,storage,localStorage,writes,elements,auth,adapter,calls,emit,runTimers,edit,remote,locks,windowListeners,document,clickAction:(action,extra={})=>documentListeners.get('click')({target:{closest:()=>({dataset:{action,...extra}})}}),setQuotaFailure:value=>{quotaFailure=value;},
+  return{app,storage,localStorage,writes,elements,auth,adapter,calls,events,emit,runTimers,edit,remote,locks,windowListeners,document,clickAction:(action,extra={})=>documentListeners.get('click')({target:{closest:()=>({dataset:{action,...extra}})}}),setQuotaFailure:value=>{quotaFailure=value;},
     resolveSession:id=>resolveSession({data:{session:session(id)},error:null})};
 }
 
@@ -142,6 +143,37 @@ test('settings remain available with their engraved gear through sign-in and sig
   await f.app.logoutCloud();
   assert.equal(button.children[1].textContent,'Ajustes');
   assert.equal(button.dataset.icon,'settings');
+});
+
+test('local migration candidates and account refreshes never open settings automatically',async()=>{
+  const f=fixture({initialUser:'account-a'});await flush();
+  assert.equal(f.app.getState().cloudReady,true);
+  assert.equal(f.elements.get('#utility-dialog').open,false);
+  const latest=f.events.findLast(event=>event.type==='trespasser:account').detail;
+  assert.equal(latest.recordsReady,true);
+  assert.equal(latest.signedIn,true);
+  f.emit('account-a');await f.runTimers();
+  assert.equal(f.elements.get('#utility-dialog').open,false);
+  f.clickAction('settings');
+  assert.equal(f.elements.get('#utility-dialog').open,true);
+  assert.match(f.elements.get('#dialog-content').innerHTML,/Salvar minhas fichas locais na conta/);
+  await f.app.logoutCloud();
+  assert.equal(f.elements.get('#utility-dialog').open,false);
+});
+
+test('Começar explicitly opens the Google account dialog, and sign-in closes it without opening settings',async()=>{
+  const f=fixture();await flush();
+  assert.equal(f.elements.get('#utility-dialog').open,false);
+  f.clickAction('onboarding');
+  assert.equal(f.elements.get('#dialog-title').textContent,'Entrar ou criar conta');
+  assert.match(f.elements.get('#dialog-content').innerHTML,/Continuar com Google/);
+  assert.doesNotMatch(f.elements.get('#dialog-content').innerHTML,/Aparência|data-theme-value/);
+  assert.equal(f.calls.some(call=>call.type==='login'),false);
+  f.clickAction('cloud-login');await flush();
+  assert.equal(f.calls.find(call=>call.type==='login').options.provider,'google');
+  f.emit('account-a');await f.runTimers();
+  assert.equal(f.elements.get('#utility-dialog').open,false);
+  assert.equal(f.events.findLast(event=>event.type==='trespasser:account').detail.recordsReady,true);
 });
 
 test('settings change appearance independently from characters and expose automatic saving without a manual sync action',async()=>{
@@ -255,7 +287,8 @@ test('only one tab may initialize an account cache; blocked tab can log out but 
   assert.equal(second.elements.get('#export-button').disabled,true);
   assert.equal(second.calls.some(call=>call.type==='list'||call.type==='save'),false);
   assert.equal(second.storage.has(`${KEY}.cloud.account-a`),false);
-  assert.match(second.elements.get('#dialog-content').innerHTML,/Esta conta está aberta em outra aba\. Feche-a e recarregue esta página\./);
+  assert.equal(second.elements.get('#utility-dialog').open,false);
+  assert.match(second.events.findLast(event=>event.type==='trespasser:account').detail.message,/Esta conta está aberta em outra aba\. Feche-a e recarregue esta página\./);
   await second.app.logoutCloud();
   assert.equal(second.app.getState().cloudUser,null);
   assert.equal(second.elements.get('#export-button').disabled,false);
@@ -273,7 +306,8 @@ test('unsupported Web Locks blocks online edits explicitly and leaves guest shee
   assert.equal(f.elements.get('#export-button').disabled,true);
   assert.equal(f.calls.some(call=>call.type==='list'||call.type==='save'),false);
   assert.equal(f.storage.has(`${KEY}.cloud.account-a`),false);
-  assert.match(f.elements.get('#dialog-content').innerHTML,/Use um navegador atualizado/);
+  assert.equal(f.elements.get('#utility-dialog').open,false);
+  assert.match(f.events.findLast(event=>event.type==='trespasser:account').detail.message,/Use um navegador atualizado/);
   await f.app.logoutCloud();
   assert.equal(f.app.getState().records[0].name,'Ficha local');
   assert.equal(f.elements.get('#main').inert,false);
