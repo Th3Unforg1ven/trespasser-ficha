@@ -8,20 +8,27 @@
 .settings-language select{max-width:100%;min-height:44px}
 .settings-language .panel-note{font-size:12px;line-height:1.5}
 
-.identity-card:has(.character-portrait){display:grid;grid-template-areas:"brand identity portrait";grid-template-columns:minmax(150px,.75fr) minmax(0,2fr) 150px;align-items:center;gap:22px}
+.identity-card:has(.character-portrait){display:grid;grid-template-areas:"brand identity portrait";grid-template-columns:minmax(150px,.75fr) minmax(0,2fr) 240px;align-items:center;gap:22px}
 .identity-card:has(.character-portrait)>.record-mark{grid-area:brand}
 .identity-card:has(.character-portrait)>.identity-fields{grid-area:identity}
-.character-portrait{grid-area:portrait;min-width:0;align-self:start;width:100%}
+.character-portrait{grid-area:portrait;min-width:0;align-self:center;width:100%;position:relative}
 .portrait-frame{position:relative;display:block;width:100%;aspect-ratio:4/5;overflow:hidden;border:2px solid currentColor;background:var(--paper,#ededE7);color:var(--ink,#222);isolation:isolate}
 .portrait-frame img{position:absolute;inset:0;display:block;width:100%;height:100%;max-width:none;object-fit:cover}
 .portrait-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;height:100%;min-height:100%;padding:14px 8px;text-align:center;font-family:Lusitana,Georgia,serif;font-size:12px;line-height:1.4;color:var(--muted,#707070);background:repeating-linear-gradient(135deg,transparent 0,transparent 8px,#7771 8px,#7771 9px)}
 .portrait-placeholder .icon{width:45px;height:45px}
-.portrait-actions{display:grid;gap:7px;margin-top:9px}
-.portrait-actions .button{width:100%;min-height:36px;padding:7px 5px;font-size:15px;white-space:normal;text-transform:none}
-.portrait-actions .button-symbol .icon{width:18px;height:18px}
+.portrait-actions{position:absolute;right:7px;bottom:7px;z-index:1;display:block}
+.workspace .portrait-edit-control{display:flex;align-items:center;justify-content:center;width:36px;min-width:36px;height:36px;min-height:36px;padding:8px;gap:0;border:1px solid var(--ink,#222);color:var(--ink,#222);background:var(--paper,#ededE7);box-shadow:2px 2px 0 #1116;cursor:pointer}
+.workspace .portrait-edit-control::before,.workspace .portrait-edit-control::after{content:none}
+.workspace .portrait-edit-control .button-symbol .icon{width:19px;height:19px}
+.workspace .portrait-edit-control>.button-label{display:none}
+.workspace .portrait-edit-control:not(:disabled):hover{color:var(--ink,#222);background:var(--paper,#ededE7);filter:brightness(.92)}
+.workspace .portrait-edit-control:focus-visible{outline:2px solid currentColor;outline-offset:3px}
 .portrait-editor{display:grid;grid-template-columns:minmax(130px,.85fr) minmax(170px,1.2fr);gap:24px;align-items:start}
 .portrait-editor .portrait-preview{width:min(100%,220px);margin:auto}
 .portrait-editor .portrait-preview .portrait-frame{width:100%}
+.portrait-editor>div:first-child>.button{width:100%;margin-top:10px;font-size:17px;min-height:38px}
+#utility-dialog .portrait-remove-control{width:100%;justify-content:center;gap:6px;margin-top:6px;font-size:13px;min-height:32px}
+#utility-dialog .portrait-remove-control .icon{width:16px;height:16px}
 .portrait-adjustments{display:grid;gap:16px;min-width:0}
 .portrait-adjustments .field{gap:7px}
 .portrait-adjustments input[type="range"]{width:100%;min-height:36px;padding:0;accent-color:currentColor;background:transparent;border:0;cursor:ew-resize}
@@ -44,7 +51,7 @@
 .legacy-plights>summary{min-height:34px;padding:8px 0;cursor:pointer}
 
 @media(max-width:1100px){
-  .identity-card:has(.character-portrait){grid-template-columns:minmax(125px,.7fr) minmax(0,2fr) 125px;gap:17px}
+  .identity-card:has(.character-portrait){grid-template-columns:minmax(125px,.7fr) minmax(0,2fr) 190px;gap:17px}
   .record-toolbar{flex-wrap:wrap}
   .workspace:not(.haven-workspace) .top-actions{margin-left:auto}
 }
@@ -55,11 +62,11 @@
   .workspace:not(.haven-workspace) .archive-tools .mobile-character-choice select{min-width:0;width:100%}
   .workspace:not(.haven-workspace) .archive-tools #haven-register-button{grid-column:1/-1;grid-row:2;min-height:37px;font-size:17px;justify-self:stretch}
   .workspace:not(.haven-workspace) .archive-tools .add-character{grid-column:3;grid-row:1;margin-left:0}
-  .identity-card:has(.character-portrait){grid-template-columns:minmax(100px,.65fr) minmax(0,1.8fr) 110px;gap:13px}
+  .identity-card:has(.character-portrait){grid-template-columns:minmax(100px,.65fr) minmax(0,1.8fr) 160px;gap:13px}
   .identity-card:has(.character-portrait) .identity-top{grid-template-columns:1fr;gap:8px}
 }
 @media(max-width:600px){
-  .identity-card:has(.character-portrait){grid-template-areas:"brand brand" "portrait identity";grid-template-columns:106px minmax(0,1fr);gap:14px;padding:14px}
+  .identity-card:has(.character-portrait){grid-template-areas:"brand brand" "portrait identity";grid-template-columns:132px minmax(0,1fr);gap:14px;padding:14px}
   .identity-card:has(.character-portrait)>.record-mark{display:grid;grid-template-columns:1fr 1fr;gap:0 12px;width:100%;margin:0;padding:0 0 13px;border-bottom:1px solid currentColor;align-items:center;text-align:left}
   .identity-card:has(.character-portrait)>.record-mark img{grid-row:1/3;max-width:175px;width:100%}
   .identity-card:has(.character-portrait)>.record-mark h1{font-size:20px;line-height:1.1}
@@ -69,17 +76,15 @@
   .identity-card:has(.character-portrait) .identity-fields .field>span{font-size:16px}
   .identity-card:has(.character-portrait) .identity-fields input{font-size:14px}
   .identity-card:has(.character-portrait) .identity-name input{font-size:16px}
-  .portrait-actions .button{font-size:14px;padding:6px 3px;gap:4px}
-  .portrait-actions .button-symbol .icon{width:16px;height:16px}
+  .workspace .portrait-edit-control{width:44px;min-width:44px;height:44px;min-height:44px;padding:12px}
+  .workspace .portrait-edit-control .button-symbol .icon{width:20px;height:20px}
   .portrait-editor{grid-template-columns:1fr;gap:17px}
   .portrait-editor .portrait-preview{max-width:150px}
   .portrait-adjustments{gap:11px}
   .plights-grid{gap:0 14px}
 }
 @media(max-width:360px){
-  .identity-card:has(.character-portrait){grid-template-columns:88px minmax(0,1fr);gap:11px;padding:12px}
-  .portrait-actions .button{font-size:13px}
-  .portrait-actions .button-symbol{display:none}
+  .identity-card:has(.character-portrait){grid-template-columns:112px minmax(0,1fr);gap:11px;padding:12px}
 }
 @media print{
   .portrait-actions,.portrait-editor,.settings-language,#haven-register-button{display:none!important}

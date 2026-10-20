@@ -31,6 +31,7 @@ class Element {
   append(...nodes){this.textContent+=nodes.map(n=>n.textContent||'').join('');}
   showModal(){this.open=true;}
   close(){this.open=false;}
+  click(){this.clickCount=(this.clickCount||0)+1;}
   focus(){}
 }
 
@@ -57,9 +58,24 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
     }
     return portraitButtons;
   }
+  let portraitDialogHtml='',portraitDialogControls=[];
+  function dialogPortraitControls(){
+    const markup=elements.get('#dialog-content').innerHTML;
+    if(markup!==portraitDialogHtml){
+      portraitDialogHtml=markup;
+      portraitDialogControls=[...markup.matchAll(/<(button|input)\b([^>]*(?:data-action="portrait-[^"]+"|data-portrait-crop="[^"]+")[^>]*)>/g)].map(match=>{
+        const control=new Element();control.tagName=match[1].toUpperCase();
+        const action=match[2].match(/data-action="([^"]+)"/),crop=match[2].match(/data-portrait-crop="([^"]+)"/);
+        if(action)control.dataset.action=action[1];if(crop)control.dataset.portraitCrop=crop[1];
+        control.disabled=/\bdisabled\b/.test(match[2]);return control;
+      });
+    }
+    return portraitDialogControls;
+  }
+  const matchPortraitControl=(control,selector)=>selector===`[data-action="${control.dataset.action}"]`||selector==='[data-portrait-crop]'&&control.dataset.portraitCrop;
   const document={hidden:false,activeElement:null,documentElement:{dataset:{},style:{}},
-    querySelector:selector=>elements.get(selector)||identityPortraitButtons().find(button=>selector===`[data-action="${button.dataset.action}"]`)||null,
-    querySelectorAll:selector=>selector.startsWith('#export-button')?[elements.get('#export-button')]:selector.includes('[data-portrait-controls]')?identityPortraitButtons():[],
+    querySelector:selector=>elements.get(selector)||[...identityPortraitButtons(),...dialogPortraitControls()].find(control=>matchPortraitControl(control,selector))||null,
+    querySelectorAll:selector=>selector.startsWith('#export-button')?[elements.get('#export-button')]:[...(selector.includes('[data-portrait-controls]')?identityPortraitButtons():[]),...dialogPortraitControls().filter(control=>selector.split(', ').some(part=>matchPortraitControl(control,part)))],
     createElement:()=>{const element=new Element();element.ownerDocument=document;return element;},createTextNode:text=>({textContent:text}),
     addEventListener(event,listener){const prior=documentListeners.get(event);documentListeners.set(event,prior?value=>{prior(value);listener(value);}:listener);}};
   for(const element of elements.values())element.ownerDocument=document;
@@ -163,6 +179,68 @@ test('portrait adjustments remain a draft until saved and are discarded when the
   f.clickAction('portrait-save');
   assert.equal(f.app.getState().records[0].portrait.dataUrl,'','an old account portrait cannot be written into a new account');
   assert.equal(f.app.getState().portraitDraft,null);
+});
+
+test('the portrait card exposes one edit icon and opens an empty editor before choosing an image',async()=>{
+  const f=fixture();await flush();
+  const identity=f.elements.get('#identity').innerHTML;
+  assert.equal([...identity.matchAll(/data-action="portrait-/g)].length,1);
+  assert.match(identity,/class="portrait-edit-control icon-button" data-icon="edit" data-action="portrait-edit" aria-label="Editar retrato"/);
+  assert.doesNotMatch(identity,/data-action="portrait-remove"|>Adicionar retrato<|>Ajustar retrato</);
+  const before=JSON.stringify(f.app.getState().records),writes=f.writes.length;
+  f.clickAction('portrait-edit');
+  assert.equal(f.elements.get('#utility-dialog').open,true);
+  assert.deepEqual(f.app.getState().portraitDraft,{dataUrl:'',zoom:1,x:50,y:50});
+  assert.match(f.elements.get('#dialog-content').innerHTML,/>Escolher imagem</);
+  assert.equal(f.document.querySelector('[data-action="portrait-save"]').disabled,true);
+  assert.equal(f.document.querySelector('[data-action="portrait-remove"]').disabled,true);
+  for(const crop of f.document.querySelectorAll('[data-portrait-crop]'))assert.equal(crop.disabled,true);
+  f.emit(null);await f.runTimers();
+  assert.equal(f.document.querySelector('[data-action="portrait-save"]').disabled,true,'readiness refresh cannot enable empty saving');
+  for(const crop of f.document.querySelectorAll('[data-portrait-crop]'))assert.equal(crop.disabled,true);
+  f.clickAction('portrait-save');
+  assert.equal(JSON.stringify(f.app.getState().records),before);
+  assert.equal(f.writes.length,writes);
+  assert.equal(f.elements.get('#portrait-file').clickCount,undefined,'opening the editor does not invoke the file chooser');
+  f.clickAction('portrait-cancel');
+  setLanguagePreference('en');f.clickAction('portrait-edit');
+  assert.match(f.elements.get('#identity').innerHTML,/aria-label="Edit portrait"/);
+  assert.match(f.elements.get('#dialog-content').innerHTML,/>Choose image</);
+  f.clickAction('portrait-cancel');setLanguagePreference('pt');
+});
+
+test('removing a portrait is a draft, cancellation keeps the original, and saving removes it',async()=>{
+  const guest=model.createCharacter('Retrato');guest.portrait={dataUrl:portraitPng(),zoom:1.7,x:20,y:80};
+  const f=fixture({guest});await flush();
+  const original=structuredClone(f.app.getState().records[0].portrait),writes=f.writes.length;
+  f.clickAction('portrait-edit');f.clickAction('portrait-remove');
+  assert.deepEqual(f.app.getState().records[0].portrait,original);
+  assert.deepEqual(f.app.getState().portraitDraft,{dataUrl:'',zoom:1,x:50,y:50});
+  assert.equal(f.writes.length,writes,'removal is not saved until the user saves');
+  assert.equal(f.document.querySelector('[data-action="portrait-save"]').disabled,false,'an empty draft can save removal of an existing image');
+  assert.equal(f.document.querySelector('[data-action="portrait-remove"]').disabled,true);
+  for(const crop of f.document.querySelectorAll('[data-portrait-crop]'))assert.equal(crop.disabled,true);
+  f.emit(null);await f.runTimers();
+  assert.equal(f.document.querySelector('[data-action="portrait-save"]').disabled,false);
+  for(const crop of f.document.querySelectorAll('[data-portrait-crop]'))assert.equal(crop.disabled,true,'readiness refresh cannot enable crop controls without an image');
+  f.clickAction('portrait-cancel');
+  assert.deepEqual(f.app.getState().records[0].portrait,original);
+  f.clickAction('portrait-edit');f.clickAction('portrait-remove');f.clickAction('portrait-save');
+  assert.deepEqual(f.app.getState().records[0].portrait,{dataUrl:'',zoom:1,x:50,y:50});
+  assert.equal(f.elements.get('#utility-dialog').open,false);
+  assert.equal(f.elements.get('#toast').textContent,'Retrato removido.');
+  const saved=JSON.parse(f.storage.get(KEY));assert.equal(saved.characters[0].portrait.dataUrl,'');
+});
+
+test('a closed portrait editor invalidates a delayed file chooser response',async()=>{
+  const f=fixture();await flush();
+  f.clickAction('portrait-edit');f.clickAction('portrait-choose');
+  assert.equal(f.elements.get('#portrait-file').clickCount,1);
+  f.clickAction('portrait-cancel');
+  await f.elements.get('#portrait-file').listeners.get('change')({target:{files:[{type:'image/png',size:100}]}});
+  assert.equal(f.elements.get('#utility-dialog').open,false);
+  assert.equal(f.app.getState().portraitDraft,null);
+  assert.equal(f.app.getState().records[0].portrait.dataUrl,'');
 });
 
 test('a delayed character JSON import cannot write into the next signed-in account or guest archive',async()=>{

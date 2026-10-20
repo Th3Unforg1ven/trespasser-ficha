@@ -6,11 +6,11 @@ import { cloudConfig } from './cloud-config.js';
 import { CloudSync } from './cloud-sync.js?v=records-2';
 import { isPristineCharacter, localMigrationCandidates, mergeLocalCharacters } from './cloud-ui-state.js?v=records-2';
 import { acquireAccountLock } from './account-lock.js';
-import { icon, setButtonLabel, mountButtonIcons } from './icons.js?v=records-2';
+import { icon, setButtonLabel, mountButtonIcons } from './icons.js?v=portrait-ui-1';
 import { setupTheme } from './preferences.js?v=settings-1';
 import { setupThemeToggle } from './ui-shell.js?v=records-2';
 import { setupLanguage, getLanguage, t, languageSettingsMarkup, translateStatic } from './i18n.js';
-import { ui, bilingual, label as localLabel, formatError } from './i18n-character.js';
+import { ui, bilingual, label as localLabel, formatError } from './i18n-character.js?v=portrait-ui-1';
 import { importPortrait, portraitStyle } from './portrait.js';
 
 setupLanguage({document,window,navigator});
@@ -323,7 +323,7 @@ function portraitMarkup(portrait,preview=false) {
 function renderIdentity() {
   const c=current();
   $('#breadcrumb-name').textContent=c.name || t('Novo personagem');
-  $('#identity').innerHTML=ui`<section class="identity-card"><div class="record-mark"><img src="./assets/Image16.png" alt="Trespasser"><h1>Registro de personagem</h1><span>${getLanguage()==='pt'?'Character record · ':''}v2.1.3</span></div><div class="identity-fields"><div class="identity-top">${field(bilingual('Nome do personagem','Name'),'name',{placeholder:t('Nome'),max:100,cls:'identity-name'})}${field(bilingual('Jogador','Player'),'player',{placeholder:t('Jogador'),max:100})}</div>${field(bilingual('Palavras para viver','Words to live by'),'motto',{placeholder:t('Uma convicção, um voto, uma lembrança.')})}</div><div class="character-portrait">${portraitMarkup(c.portrait)}<div class="portrait-actions" data-portrait-controls><button type="button" class="button small" data-icon="person" data-action="portrait-edit" ${!canEditPortrait()?'disabled':''}>${t(c.portrait?.dataUrl?'Ajustar retrato':'Adicionar retrato')}</button>${c.portrait?.dataUrl?`<button type="button" class="text-button" data-action="portrait-remove" ${!canEditPortrait()?'disabled':''}>${t('Remover retrato')}</button>`:''}</div></div></section>`;
+  $('#identity').innerHTML=ui`<section class="identity-card"><div class="record-mark"><img src="./assets/Image16.png" alt="Trespasser"><h1>Registro de personagem</h1><span>${getLanguage()==='pt'?'Character record · ':''}v2.1.3</span></div><div class="identity-fields"><div class="identity-top">${field(bilingual('Nome do personagem','Name'),'name',{placeholder:t('Nome'),max:100,cls:'identity-name'})}${field(bilingual('Jogador','Player'),'player',{placeholder:t('Jogador'),max:100})}</div>${field(bilingual('Palavras para viver','Words to live by'),'motto',{placeholder:t('Uma convicção, um voto, uma lembrança.')})}</div><div class="character-portrait">${portraitMarkup(c.portrait)}<div class="portrait-actions" data-portrait-controls><button type="button" class="portrait-edit-control icon-button" data-icon="edit" data-action="portrait-edit" aria-label="${t('Editar retrato')}" title="${t('Editar retrato')}" ${!canEditPortrait()?'disabled':''}></button></div></div></section>`;
   mountButtonIcons($('#identity'));
 }
 function plightsMarkup() {
@@ -332,21 +332,27 @@ function plightsMarkup() {
 }
 let portraitDraft=null,portraitOwner=null,portraitRequest=null;
 const canEditPortrait=()=>!cloudUser||cloudReady&&!cloudBlockedReason;
+const hasPortraitDraft=()=>Boolean(portraitDraft&&portraitOwner?.id===activeId&&portraitOwner.generation===cloudGeneration&&$('#utility-dialog').open);
+const canSavePortrait=()=>canEditPortrait()&&hasPortraitDraft()&&Boolean(portraitDraft.dataUrl||current()?.portrait?.dataUrl);
 function syncPortraitControls() {
   const disabled=!canEditPortrait();
   // Readiness changes only update existing controls; preserve identity inputs,
   // focus, and any in-progress crop preview rather than rendering the card again.
-  document.querySelectorAll('[data-portrait-controls] button, [data-action="portrait-choose"], [data-action="portrait-save"]').forEach(button=>{button.disabled=disabled;});
+  document.querySelectorAll('[data-portrait-controls] button, [data-action="portrait-choose"]').forEach(button=>{button.disabled=disabled;});
+  document.querySelectorAll('[data-action="portrait-save"]').forEach(button=>{button.disabled=!canSavePortrait();});
+  document.querySelectorAll('[data-action="portrait-remove"], [data-portrait-crop]').forEach(control=>{control.disabled=disabled||!hasPortraitDraft()||!portraitDraft.dataUrl;});
 }
-function showPortraitEditor(draft) {
+function showPortraitEditor(draft=current().portrait) {
   if(!canEditPortrait())return;
   const owner={id:activeId,generation:cloudGeneration};
-  const content=()=>`<div class="portrait-editor"><div>${portraitMarkup(draft,true)}<button type="button" class="button" data-icon="import" data-action="portrait-choose">${t('Trocar imagem')}</button></div><div class="portrait-adjustments"><p>${t('Ajuste o zoom e a posição para enquadrar seu personagem.')}</p>${[['zoom','Zoom',1,3,0.05],['x','Posição horizontal',0,100,1],['y','Posição vertical',0,100,1]].map(([key,name,min,max,step])=>`<label class="field"><span>${t(name)} <output data-portrait-output="${key}">${key==='zoom'?Number(draft[key]).toFixed(2)+'×':Math.round(draft[key])+'%'}</output></span><input type="range" data-portrait-crop="${key}" min="${min}" max="${max}" step="${step}" value="${draft[key]}" aria-label="${t(name)}"></label>`).join('')}<p class="panel-note">${t('PNG, JPEG ou WebP, até 12 MB. A imagem é reduzida e salva com a ficha.')}</p><div class="dialog-actions"><button type="button" class="button primary" data-action="portrait-save">${t('Salvar retrato')}</button><button type="button" class="button" data-action="portrait-cancel">${t('Cancelar')}</button></div></div></div>`;
+  const hasImage=Boolean(draft.dataUrl);
+  const content=()=>`<div class="portrait-editor${hasImage?'':' portrait-empty'}"><div>${portraitMarkup(draft,true)}<button type="button" class="button" data-icon="import" data-action="portrait-choose">${t(hasImage?'Trocar imagem':'Escolher imagem')}</button><button type="button" class="text-button portrait-remove-control" data-icon="trash" data-action="portrait-remove" ${hasImage?'':'disabled'}>${t('Remover retrato')}</button></div><div class="portrait-adjustments"><p>${t(hasImage?'Ajuste o zoom e a posição para enquadrar seu personagem.':'Escolha uma imagem para ajustar o enquadramento antes de salvar.')}</p>${[['zoom','Zoom',1,3,0.05],['x','Posição horizontal',0,100,1],['y','Posição vertical',0,100,1]].map(([key,name,min,max,step])=>`<label class="field"><span>${t(name)} <output data-portrait-output="${key}">${key==='zoom'?Number(draft[key]).toFixed(2)+'×':Math.round(draft[key])+'%'}</output></span><input type="range" data-portrait-crop="${key}" min="${min}" max="${max}" step="${step}" value="${draft[key]}" aria-label="${t(name)}" ${hasImage?'':'disabled'}></label>`).join('')}<p class="panel-note">${t('PNG, JPEG ou WebP, até 12 MB. A imagem é reduzida e salva com a ficha.')}</p><div class="dialog-actions"><button type="button" class="button primary" data-action="portrait-save" ${hasImage||current()?.portrait?.dataUrl?'':'disabled'}>${t('Salvar retrato')}</button><button type="button" class="button" data-action="portrait-cancel">${t('Cancelar')}</button></div></div></div>`;
   showDialog(t('Ajustar retrato'),content());portraitDraft=structuredClone(draft);portraitOwner=owner;
+  syncPortraitControls();
 }
 function choosePortrait() {
-  if(!canEditPortrait())return;
-  portraitRequest={id:activeId,generation:cloudGeneration};
+  if(!canEditPortrait()||!$('#utility-dialog').open)return;
+  portraitRequest={id:activeId,generation:cloudGeneration,dialogVersion};
   $('#portrait-file').value='';$('#portrait-file').click();
 }
 
@@ -482,7 +488,8 @@ function numericValue(input) {
 }
 document.addEventListener('input',e=>{
   const el=e.target;
-  if(el.dataset.portraitCrop && portraitDraft){
+  if(el.dataset.portraitCrop){
+    if(!canEditPortrait()||!hasPortraitDraft()||!portraitDraft.dataUrl)return;
     const key=el.dataset.portraitCrop;portraitDraft[key]=Number(el.value);
     const preview=$('#dialog-content .portrait-preview img');if(preview)preview.setAttribute('style',portraitStyle(portraitDraft));
     const output=document.querySelector(`[data-portrait-output="${key}"]`);if(output)output.textContent=key==='zoom'?portraitDraft[key].toFixed(2)+'×':Math.round(portraitDraft[key])+'%';
@@ -514,11 +521,11 @@ document.addEventListener('click',e=>{
   if(el.dataset.roll){openDice(el.dataset.roll);performRoll(el.dataset.roll);return;}
   if(el.dataset.useDeed!==undefined){const deed=c.deeds[Number(el.dataset.useDeed)],cost=Number(deed.cost)+Number(deed.focus);if(c.resources.focus<cost){toast(t('Foco insuficiente para este feito.'));return;}c.resources.focus-=cost;if(['heavy','mighty'].includes(deed.kind))deed.focus=Math.min(10000,deed.focus+1);save();render();toast(t('Feito usado: {count} foco gasto.',{count:cost}));return;}
   const action=el.dataset.action;
-  if(action==='portrait-edit'){if(c.portrait?.dataUrl)showPortraitEditor(c.portrait);else choosePortrait();return;}
+  if(action==='portrait-edit'){showPortraitEditor(c.portrait);return;}
   if(action==='portrait-choose'){choosePortrait();return;}
   if(action==='portrait-cancel'){closeDialog();return;}
-  if(action==='portrait-save'){if(portraitDraft&&portraitOwner?.id===activeId&&portraitOwner.generation===cloudGeneration&&canEditPortrait()){c.portrait=structuredClone(portraitDraft);save();renderIdentity();closeDialog();toast(t('Retrato salvo.'));}return;}
-  if(action==='portrait-remove'){if(canEditPortrait()){c.portrait={dataUrl:'',zoom:1,x:50,y:50};save();renderIdentity();toast(t('Retrato removido.'));}return;}
+  if(action==='portrait-save'){if(canSavePortrait()){const removed=!portraitDraft.dataUrl;c.portrait=structuredClone(portraitDraft);save();renderIdentity();closeDialog();toast(t(removed?'Retrato removido.':'Retrato salvo.'));}return;}
+  if(action==='portrait-remove'){if(canEditPortrait()&&hasPortraitDraft()&&portraitDraft.dataUrl)showPortraitEditor({dataUrl:'',zoom:1,x:50,y:50});return;}
   if(action==='onboarding'){openOnboardingDialog();return;}
   if(action==='cloud-account'){openAccountDialog();return;}
   if(action==='settings'){openAccountDialog();return;}
@@ -607,7 +614,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)void syncC
 
 $('#portrait-file').addEventListener('change',async event=>{
   const file=event.target.files?.[0],request=portraitRequest;portraitRequest=null;
-  if(!file||!request||request.id!==activeId||request.generation!==cloudGeneration||!canEditPortrait())return;
+  if(!file||!request||request.id!==activeId||request.generation!==cloudGeneration||request.dialogVersion!==dialogVersion||!$('#utility-dialog').open||!canEditPortrait())return;
   const version=showDialog(t('Preparando retrato'),`<p role="status">${t('Preparando sua imagem…')}</p>`);
   try{
     const portrait=await importPortrait(file);

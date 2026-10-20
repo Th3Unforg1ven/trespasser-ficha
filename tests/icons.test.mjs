@@ -23,12 +23,14 @@ function control({ text = 'Entrar', name = 'helm', iconOnly = false } = {}) {
 }
 
 test('SVG symbols are decorative and unknown or inherited names have a safe fallback', () => {
-  for (const name of ['record', 'helm', 'torch', 'dice', 'sword', 'import', 'export', 'print', 'rest', 'sync', 'logout']) {
+  for (const name of ['record', 'helm', 'torch', 'dice', 'sword', 'import', 'export', 'print', 'rest', 'sync', 'logout','edit']) {
     const svg = icon(name);
     assert.match(svg, /aria-hidden="true"/);
     assert.match(svg, /focusable="false"/);
     assert.doesNotMatch(svg, /<title|<text|<script|href=|undefined/);
   }
+  assert.match(icon('edit'),/icon--edit/);
+  assert.notEqual(icon('edit'),icon('record'));
   for (const name of ['constructor', '__proto__', 'toString', '"><script>alert(1)</script>']) assert.equal(icon(name), icon('record'));
   assert.doesNotMatch(icon('record', 'nav-icon " onload="alert(1)'), /onload|alert|<script/);
 });
