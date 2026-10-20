@@ -105,11 +105,43 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
   const run=new Function(...Object.keys(dependencies),appSource+'\nreturn {getState:()=>({records,activeId,tab,cloudUser,cloudReady,cloudStatus,portraitDraft}),attachSession,save,syncCloud,logoutCloud,loginCloud,migrateLocalCharacters,showPortraitEditor};');
   const app=run(...Object.values(dependencies));
   const runTimers=async(delay=0)=>{for(const[id,timer]of[...timers])if(timer.delay===delay){timers.delete(id);timer.fn();}await flush();};
-  function edit(path,value){const target={dataset:{field:path},value,type:'text',matches:selector=>selector==='[data-field]'};documentListeners.get('input')({target});}
+  function edit(path,value,element={}){const target={dataset:{field:path},value,type:'text',matches:selector=>selector==='[data-field]',...element};documentListeners.get('input')({target});}
   return{app,storage,localStorage,writes,elements,auth,adapter,calls,events,emit,runTimers,edit,remote,locks,windowListeners,document,clickAction:(action,extra={})=>documentListeners.get('click')({target:{closest:selector=>selector==='button'?({dataset:{action,...extra}}):null}}),setQuotaFailure:value=>{quotaFailure=value;},
     change:target=>documentListeners.get('change')({target}),
     resolveSession:id=>resolveSession({data:{session:session(id)},error:null}),resolveLogout:()=>resolveLogout()};
 }
+
+test('compact character panels preserve saved fields and features grow only with their own text',async()=>{
+  const character=model.createCharacter('Registro completo');
+  character.features='Uma habilidade de linhagem.\nOutro talento & uma técnica.';
+  character.lineage='Anão';character.pastLife='Ferreiro';character.calling='Sentinel';character.crafts='Metalurgia';
+  character.alignments[0].name='Honrar meu juramento';character.alignments[0].affirm=2;
+  character.injuries[0].name='Cicatriz';character.injuries[0].clock=3;
+  const f=fixture({guest:character});await flush();
+  const before=JSON.stringify(f.app.getState().records);
+  const markup=f.elements.get('#sheet-content').innerHTML;
+  assert.deepEqual([...markup.matchAll(/<section class="panel ([^"]+)">/g)].map(match=>match[1]),['attribute-panel','health-panel','advancement-panel','alignment-panel','features-panel']);
+  assert.doesNotMatch(markup,/sheet-column/);
+  assert.match(markup,/<textarea data-field="features" rows="5"[^>]*>Uma habilidade de linhagem\.\nOutro talento &amp; uma técnica\.<\/textarea>/);
+  for(const value of ['Anão','Ferreiro','Sentinel','Metalurgia','Honrar meu juramento','Cicatriz'])assert.ok(markup.includes(value));
+  assert.equal(JSON.stringify(f.app.getState().records),before,'a compact rerender cannot change stored character values');
+
+  const featuresElement={tagName:'TEXTAREA',style:{},scrollHeight:340,offsetHeight:144,clientHeight:140,closest:selector=>selector==='.features-panel'?{}:null};
+  const longFeatures=Array.from({length:20},(_,i)=>`Talento ${i+1}: descrição preservada.`).join('\n');
+  f.edit('features',longFeatures,featuresElement);
+  assert.equal(featuresElement.style.height,'344px','typed features grow to their content without editing unrelated fields');
+  assert.equal(f.app.getState().records[0].features,longFeatures);
+  featuresElement.scrollHeight=140;
+  f.edit('features','Uma habilidade.',featuresElement);
+  assert.equal(featuresElement.style.height,'144px','removing text restores compact height without a tall empty field');
+  f.clickAction('',{tab:'equipment'});f.clickAction('',{tab:'character'});
+  assert.match(f.elements.get('#sheet-content').innerHTML,/>Uma habilidade\.<\/textarea>/);
+  const restored={...f.app.getState().records[0],features:character.features};
+  assert.equal(JSON.stringify([restored]),before,'all fields outside features retain their previous values');
+  const notesStyle={height:'200px'};
+  f.edit('notes','Diário preservado',{style:notesStyle,scrollHeight:500,offsetHeight:144,clientHeight:140});
+  assert.equal(notesStyle.height,'200px','features sizing does not resize the journal');
+});
 
 test('portrait controls unlock after cold account initialization and stay blocked with an unavailable account lock',async()=>{
   const f=fixture({initialUser:'account-a'});await flush();

@@ -413,9 +413,11 @@ function characterPage() {
   const skills=SKILLS.map(s=>ui`<label class="skill-check"><input type="checkbox" data-skill="${s.key}" ${c.trained.includes(s.key)?'checked':''}><span><strong>${getLanguage()==='en'?s.en:s.pt}</strong>${getLanguage()==='pt'?ui`<small>${s.en}</small>`:''}</span><span class="skill-bonus">${c.trained.includes(s.key)?signed(d.skill):'—'}</span></label>`).join('');
   const alignments=c.alignments.map((a,i)=>ui`<div class="alignment-row">${field(bilingual(t('Traço {number}',{number:i+1}),`Trait ${i+1}`),ui`alignments.${i}.name`,{placeholder:t('Convicção ou ideal')})}<div class="alignment-ticks"><span>Negar <small>Deny</small></span>${[1,2,3].map(n=>ui`<button data-alignment="${i}.deny.${n}" class="tick ${a.deny>=n?'on':''}" aria-label="${t('Negar traço {number}: {count}',{number:i+1,count:n})}" aria-pressed="${a.deny>=n}">◆</button>`).join('')}<span class="tick-spacer"></span><span>Afirmar <small>Affirm</small></span>${[1,2,3].map(n=>ui`<button data-alignment="${i}.affirm.${n}" class="tick ${a.affirm>=n?'on':''}" aria-label="${t('Afirmar traço {number}: {count}',{number:i+1,count:n})}" aria-pressed="${a.affirm>=n}">◆</button>`).join('')}</div></div>`).join('');
   return ui`<div class="character-sheet-grid">
-    <div class="sheet-column attribute-column">${panel(t('Atributos & perícias'),'Attributes & skills',ui`<div class="attribute-header"><span>ATRIBUTO</span><span>VALOR</span><span title="Atributo-chave">CHAVE</span></div>${attrs}<div class="skill-summary"><span>Proficiência <small>Skill bonus</small></span><strong>+${d.skill}</strong><span>Dado de perícia <small>Skill die</small></span><strong>${d.skillDie}</strong></div><div class="skills-grid">${skills}</div><div class="derived-pair"><div><span>Explorar <small>Explore</small></span><strong>${signed(d.explore)}</strong></div><div><span>Encontro <small>Encounter</small></span><strong>${signed(d.encounter)}</strong></div></div><p class="panel-note">${d.commoner?t('Nível 0: Precisão usa o maior entre Força e Agilidade.'):t('◆ Marque seu atributo-chave para calcular a Precisão.')}</p>`)}</div>
-    <div class="sheet-column health-column">${panel(t('Saúde & ferimentos'),'Health & injuries',ui`${plightsMarkup()}<div class="injuries">${c.injuries.map((inj,i)=>ui`<div>${field(bilingual(t('Ferimento {number}',{number:i+1}),`Injury ${i+1}`),ui`injuries.${i}.name`,{placeholder:t('Ferimento')})}${num(ui(['Relógio <small>Clock</small>']),ui`injuries.${i}.clock`,{min:0})}</div>`).join('')}</div>`)}${panel(t('Características & talentos'),'Features & talents',area(t('Características, habilidades e benefícios'),'features',t('Talentos, habilidades de linhagem e benefícios da vocação.'),13),'features-panel')}</div>
-    <div class="sheet-column advancement-column">${panel(t('Avanço'),'Advancement',ui`<div class="advancement-stats">${num(ui(['Nível <small>Level</small>']),'level',{min:0,max:9})}${num(ui(['Experiência <small>XP</small>']),'xp',{min:0})}<div class="field"><span>Próximo nível <small>Next level</small></span><div class="readout">${d.nextXp??'—'}<small>${d.commoner?t('Após o Primeiro Dia'):c.level===9?t('Nível máximo'):'XP'}</small></div></div></div><div class="advancement-fields">${field(ui(['Linhagem <small>Lineage</small>']),'lineage',{placeholder:t('Linhagem')})}${field(ui(['Vida passada <small>Past life</small>']),'pastLife',{placeholder:t('Vida passada')})}${field(ui(['Vocação <small>Calling</small>']),'calling',{placeholder:c.level===0?'Commoner':t('Vocação')})}${field(ui(['Ofícios <small>Crafts</small>']),'crafts',{placeholder:t('Ofícios')})}</div><p class="panel-note">Altere o nível após gastar a experiência e escolher os benefícios do avanço.</p>`)}${panel(t('Alinhamento'),'Alignment',alignments)}</div>
+    ${panel(t('Atributos & perícias'),'Attributes & skills',ui`<div class="attribute-header"><span>ATRIBUTO</span><span>VALOR</span><span title="Atributo-chave">CHAVE</span></div>${attrs}<div class="skill-summary"><span>Proficiência <small>Skill bonus</small></span><strong>+${d.skill}</strong><span>Dado de perícia <small>Skill die</small></span><strong>${d.skillDie}</strong></div><div class="skills-grid">${skills}</div><div class="derived-pair"><div><span>Explorar <small>Explore</small></span><strong>${signed(d.explore)}</strong></div><div><span>Encontro <small>Encounter</small></span><strong>${signed(d.encounter)}</strong></div></div><p class="panel-note">${d.commoner?t('Nível 0: Precisão usa o maior entre Força e Agilidade.'):t('◆ Marque seu atributo-chave para calcular a Precisão.')}</p>`,'attribute-panel')}
+    ${panel(t('Saúde & ferimentos'),'Health & injuries',ui`${plightsMarkup()}<div class="injuries">${c.injuries.map((inj,i)=>ui`<div>${field(bilingual(t('Ferimento {number}',{number:i+1}),`Injury ${i+1}`),ui`injuries.${i}.name`,{placeholder:t('Ferimento')})}${num(ui(['Relógio <small>Clock</small>']),ui`injuries.${i}.clock`,{min:0})}</div>`).join('')}</div>`,'health-panel')}
+    ${panel(t('Avanço'),'Advancement',ui`<div class="advancement-stats">${num(ui(['Nível <small>Level</small>']),'level',{min:0,max:9})}${num(ui(['Experiência <small>XP</small>']),'xp',{min:0})}<div class="field"><span>Próximo nível <small>Next level</small></span><div class="readout">${d.nextXp??'—'}<small>${d.commoner?t('Após o Primeiro Dia'):c.level===9?t('Nível máximo'):'XP'}</small></div></div></div><div class="advancement-fields">${field(ui(['Linhagem <small>Lineage</small>']),'lineage',{placeholder:t('Linhagem')})}${field(ui(['Vida passada <small>Past life</small>']),'pastLife',{placeholder:t('Vida passada')})}${field(ui(['Vocação <small>Calling</small>']),'calling',{placeholder:c.level===0?'Commoner':t('Vocação')})}${field(ui(['Ofícios <small>Crafts</small>']),'crafts',{placeholder:t('Ofícios')})}</div><p class="panel-note">Altere o nível após gastar a experiência e escolher os benefícios do avanço.</p>`,'advancement-panel')}
+    ${panel(t('Alinhamento'),'Alignment',alignments,'alignment-panel')}
+    ${panel(t('Características & talentos'),'Features & talents',area(t('Características, habilidades e benefícios'),'features',t('Talentos, habilidades de linhagem e benefícios da vocação.'),5),'features-panel')}
   </div>`;
 }
 const STATES=[['accurate','Preciso','Accurate'],['inaccurate','Impreciso','Inaccurate'],['guarded','Protegido','Guarded'],['unguarded','Desprotegido','Unguarded'],['fortified','Fortificado','Fortified'],['frail','Frágil','Frail'],['hastened','Acelerado','Hastened'],['hindered','Atrasado','Hindered'],['mending','Regenerando','Mending'],['afflicted','Afligido','Afflicted'],['strong','Forte','Strong'],['weak','Enfraquecido','Weak'],['swift','Veloz','Swift'],['slow','Lento','Slow'],['willful','Determinado','Willful'],['weary','Exausto','Weary'],['bleeding','Sangrando','Bleeding'],['blinded','Cego','Blinded'],['burning','Em chamas','Burning'],['staggered','Cambaleante','Staggered'],['toppled','Derrubado','Toppled']];
@@ -434,7 +436,31 @@ function equipmentPage() {
 }
 function notesPage() { return ui`${panel(t('Diário de viagem'),'Journal',area(t('Anotações da aventura'),'notes',t('Pessoas que encontrou. Promessas que fez. Lugares aos quais talvez volte.'),18))}<div class="quiet-callout">${icon('book')}<div><h3>${cloudUser?t('Sua ficha online'):t('Continue em outro dispositivo')}</h3><p>${cloudUser?t('As alterações são sincronizadas com sua conta. Entre com o mesmo Google no celular e no computador para acessar esta ficha.'):t('Use Entrar para salvar suas fichas na conta e continuar no celular ou no computador. Sem entrar, elas ficam neste navegador.')}</p><button class="text-button" data-icon="settings" data-action="cloud-account">${cloudUser?t('Configurações'):t('Entrar para salvar online')}</button><h3>Cópia da ficha</h3><p>Exportar baixa um ZIP com o PDF preenchível e o JSON da ficha. O PDF mantém campos editáveis; o JSON permite reabrir o personagem neste site. Alterações nos arquivos são independentes. Use a impressão para levar uma cópia em papel.</p><button class="text-button" data-icon="export" data-action="export">Exportar PDF + JSON</button></div></div>`; }
 const pages={character:characterPage,combat:combatPage,equipment:equipmentPage,notes:notesPage};
-function renderContent() { $('#sheet-content').innerHTML=pages[tab]();mountButtonIcons($('#sheet-content'));syncExportButtons(); }
+let featuresResizeObserver;
+function resizeFeaturesArea(area=$('.features-panel textarea[data-field="features"]')) {
+  if (!area?.style) return;
+  area.style.height='auto';
+  if (area.scrollHeight>0) area.style.height=`${area.scrollHeight+(area.offsetHeight-area.clientHeight)}px`;
+}
+function watchFeaturesArea() {
+  featuresResizeObserver?.disconnect();
+  const area=$('.features-panel textarea[data-field="features"]');
+  if (!area) return;
+  resizeFeaturesArea(area);
+  if (typeof ResizeObserver==='function') {
+    let previousWidth=-1;
+    featuresResizeObserver=new ResizeObserver(entries=>{
+      const width=entries[0]?.contentRect.width||0;
+      if (width===previousWidth) return;
+      previousWidth=width;
+      resizeFeaturesArea(area);
+    });
+    featuresResizeObserver.observe(area);
+  }
+}
+window.addEventListener('resize',()=>resizeFeaturesArea());
+document.fonts?.ready?.then(()=>resizeFeaturesArea());
+function renderContent() { $('#sheet-content').innerHTML=pages[tab]();mountButtonIcons($('#sheet-content'));watchFeaturesArea();syncExportButtons(); }
 function render() {
   const previous=document.activeElement;
   const focused=previous?.dataset.field;
@@ -544,6 +570,7 @@ document.addEventListener('input',e=>{
   if (!el.matches('[data-field]'))return;
   const val=el.type==='checkbox'?el.checked:el.type==='number'?numericValue(el):el.value;
   setAt(current(),el.dataset.field,val); save();
+  if (el.dataset.field==='features'&&el.closest?.('.features-panel')) resizeFeaturesArea(el);
   if(el.dataset.field==='name'||el.dataset.field==='calling'){ renderSidebar();$('#breadcrumb-name').textContent=current().name||t('Novo personagem'); }
 });
 document.addEventListener('change',e=>{

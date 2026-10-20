@@ -1,0 +1,89 @@
+/* Cards follow their content; the writing area no longer stretches three columns. */
+@media screen {
+  .character-sheet-grid {
+    display:grid;
+    grid-template-columns:minmax(0,1.07fr) repeat(2,minmax(0,1fr));
+    grid-template-areas:"attributes advancement alignment" "attributes health health" "features features features";
+    align-items:stretch;
+    border-bottom:0;
+  }
+  .character-sheet-grid::after {display:none}
+  .character-sheet-grid>.panel {
+    min-width:0;
+    margin:0;
+    padding:19px 18px 20px;
+    border:0;
+    border-bottom:4px solid var(--character-rule,#111);
+  }
+  .character-sheet-grid>.attribute-panel {grid-area:attributes;border-right:4px solid var(--character-rule,#111)}
+  .character-sheet-grid>.advancement-panel {grid-area:advancement;border-right:4px solid var(--character-rule,#111)}
+  .character-sheet-grid>.alignment-panel {grid-area:alignment}
+  .character-sheet-grid>.health-panel {grid-area:health;container:character-health / inline-size}
+  .character-sheet-grid>.features-panel {grid-area:features;border-bottom:0}
+  .character-sheet-grid>.panel::before {width:8px;height:8px}
+  .character-sheet-grid>.panel::after {display:none}
+  .advancement-panel .advancement-fields {grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .advancement-panel .panel-note {margin-bottom:0}
+  .alignment-panel .alignment-row {padding-bottom:13px}
+  .alignment-panel .alignment-row:last-child {padding-bottom:0}
+  .health-panel .plights-grid {grid-template-columns:repeat(5,minmax(0,1fr));gap:0 12px}
+  .health-panel .injuries {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
+  .health-panel .injuries>div {display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:8px;margin-top:0}
+  .features-panel>.field {display:flex;flex-direction:column;gap:8px}
+  .features-panel textarea {
+    display:block;
+    min-height:135px;
+    max-height:none;
+    overflow-y:auto;
+    resize:vertical;
+    line-height:27px;
+    padding:7px 10px;
+    background-image:repeating-linear-gradient(transparent 0,transparent 26px,var(--line,#aaa) 26px,var(--line,#aaa) 27px);
+    background-position:0 7px;
+  }
+  html[data-theme="dark"] .character-sheet-grid {--character-rule:var(--night-edge,#8b8b84)}
+  @container character-health (max-width:640px) {
+    .health-panel .plights-grid {grid-template-columns:repeat(3,minmax(0,1fr))}
+  }
+  @container character-health (max-width:430px) {
+    .health-panel .plights-grid {grid-template-columns:repeat(2,minmax(0,1fr))}
+    .health-panel .injuries {grid-template-columns:1fr;gap:12px}
+    .health-panel .injuries>div {grid-template-columns:minmax(0,1fr) 58px}
+  }
+  @media (min-width:1500px) {
+    .character-sheet-grid>.panel {padding:21px}
+  }
+  @media (max-width:1000px) {
+    .character-sheet-grid {
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      grid-template-areas:"attributes advancement" "attributes alignment" "health health" "features features";
+    }
+    .character-sheet-grid>.panel {padding:17px 14px}
+    .character-sheet-grid>.advancement-panel {border-right:0}
+  }
+  @media (max-width:700px) {
+    .character-sheet-grid {
+      grid-template-columns:minmax(0,1fr);
+      grid-template-areas:"attributes" "health" "advancement" "alignment" "features";
+    }
+    .character-sheet-grid>.panel {padding:18px 16px;border-right:0}
+    .features-panel textarea {min-height:135px}
+  }
+}
+@media print {
+  .character-sheet-grid {
+    display:grid;
+    grid-template-columns:1.07fr 1fr 1fr;
+    grid-template-areas:"attributes advancement alignment" "attributes health health" "features features features";
+  }
+  .character-sheet-grid>.panel {margin:0;padding:12px 10px;border:0;border-bottom:2px solid #111}
+  .character-sheet-grid>.attribute-panel {grid-area:attributes;border-right:2px solid #111}
+  .character-sheet-grid>.advancement-panel {grid-area:advancement;border-right:2px solid #111}
+  .character-sheet-grid>.alignment-panel {grid-area:alignment}
+  .character-sheet-grid>.health-panel {grid-area:health}
+  .character-sheet-grid>.features-panel {grid-area:features;border-bottom:0}
+  .advancement-panel .advancement-fields {grid-template-columns:1fr 1fr}
+  .health-panel .plights-grid {grid-template-columns:repeat(3,minmax(0,1fr))}
+  .health-panel .injuries {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+  .health-panel .injuries>div {margin-top:0}
+}
