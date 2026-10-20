@@ -1,6 +1,6 @@
 /* A title page in ink: the supplied illustrations fill the view, without a frame. */
 body[data-view="home"]{background:#080909;color:#f5f4ef}
-.landing[hidden],#record-workspace[hidden]{display:none!important}
+.landing[hidden],.landing [hidden],#record-workspace[hidden]{display:none!important}
 .landing{position:relative;isolation:isolate;min-height:100svh;display:flex;flex-direction:column;overflow:hidden;background:#080909;color:#f5f4ef;font-family:Lusitana,Georgia,serif}
 .landing-backdrop,.landing-scene,.landing-shade{position:absolute;inset:0;z-index:-1;pointer-events:none}
 .landing-backdrop{background:linear-gradient(90deg,#080909aa,#08090933),url('./assets/landing/castelo.png') center 42%/cover no-repeat;filter:blur(3px);transform:scale(1.03);opacity:.25}
