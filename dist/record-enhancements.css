@@ -50,10 +50,11 @@
 }
 @media(max-width:760px){
   .workspace:not(.haven-workspace) .archive-tools{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:8px;min-width:0}
-  .workspace:not(.haven-workspace) .archive-tools .mobile-character-choice{width:100%;min-width:0;max-width:none}
+  .workspace:not(.haven-workspace) .archive-tools .home-button{grid-column:1;grid-row:1}
+  .workspace:not(.haven-workspace) .archive-tools .mobile-character-choice{grid-column:2;grid-row:1;width:100%;min-width:0;max-width:none}
   .workspace:not(.haven-workspace) .archive-tools .mobile-character-choice select{min-width:0;width:100%}
-  .workspace:not(.haven-workspace) .archive-tools #haven-register-button{grid-column:2/4;min-height:37px;font-size:17px;justify-self:stretch}
-  .workspace:not(.haven-workspace) .archive-tools .add-character{margin-left:0}
+  .workspace:not(.haven-workspace) .archive-tools #haven-register-button{grid-column:1/-1;grid-row:2;min-height:37px;font-size:17px;justify-self:stretch}
+  .workspace:not(.haven-workspace) .archive-tools .add-character{grid-column:3;grid-row:1;margin-left:0}
   .identity-card:has(.character-portrait){grid-template-columns:minmax(100px,.65fr) minmax(0,1.8fr) 110px;gap:13px}
   .identity-card:has(.character-portrait) .identity-top{grid-template-columns:1fr;gap:8px}
 }
