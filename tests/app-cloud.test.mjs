@@ -217,6 +217,7 @@ test('removing a portrait is a draft, cancellation keeps the original, and savin
   assert.deepEqual(f.app.getState().records[0].portrait,original);
   assert.deepEqual(f.app.getState().portraitDraft,{dataUrl:'',zoom:1,x:50,y:50});
   assert.equal(f.writes.length,writes,'removal is not saved until the user saves');
+  assert.match(f.elements.get('#dialog-content').innerHTML,/O retrato será removido ao salvar\. Você também pode escolher outra imagem\./);
   assert.equal(f.document.querySelector('[data-action="portrait-save"]').disabled,false,'an empty draft can save removal of an existing image');
   assert.equal(f.document.querySelector('[data-action="portrait-remove"]').disabled,true);
   for(const crop of f.document.querySelectorAll('[data-portrait-crop]'))assert.equal(crop.disabled,true);
@@ -225,7 +226,10 @@ test('removing a portrait is a draft, cancellation keeps the original, and savin
   for(const crop of f.document.querySelectorAll('[data-portrait-crop]'))assert.equal(crop.disabled,true,'readiness refresh cannot enable crop controls without an image');
   f.clickAction('portrait-cancel');
   assert.deepEqual(f.app.getState().records[0].portrait,original);
-  f.clickAction('portrait-edit');f.clickAction('portrait-remove');f.clickAction('portrait-save');
+  setLanguagePreference('en');
+  f.clickAction('portrait-edit');f.clickAction('portrait-remove');
+  assert.match(f.elements.get('#dialog-content').innerHTML,/Saving will remove the portrait\. You can also choose another image\./);
+  setLanguagePreference('pt');f.clickAction('portrait-save');
   assert.deepEqual(f.app.getState().records[0].portrait,{dataUrl:'',zoom:1,x:50,y:50});
   assert.equal(f.elements.get('#utility-dialog').open,false);
   assert.equal(f.elements.get('#toast').textContent,'Retrato removido.');

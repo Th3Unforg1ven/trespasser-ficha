@@ -6,11 +6,11 @@ import { cloudConfig } from './cloud-config.js';
 import { CloudSync } from './cloud-sync.js?v=records-2';
 import { isPristineCharacter, localMigrationCandidates, mergeLocalCharacters } from './cloud-ui-state.js?v=records-2';
 import { acquireAccountLock } from './account-lock.js';
-import { icon, setButtonLabel, mountButtonIcons } from './icons.js?v=portrait-ui-1';
+import { icon, setButtonLabel, mountButtonIcons } from './icons.js?v=portrait-ui-2';
 import { setupTheme } from './preferences.js?v=settings-1';
 import { setupThemeToggle } from './ui-shell.js?v=records-2';
 import { setupLanguage, getLanguage, t, languageSettingsMarkup, translateStatic } from './i18n.js';
-import { ui, bilingual, label as localLabel, formatError } from './i18n-character.js?v=portrait-ui-1';
+import { ui, bilingual, label as localLabel, formatError } from './i18n-character.js?v=portrait-ui-2';
 import { importPortrait, portraitStyle } from './portrait.js';
 
 setupLanguage({document,window,navigator});
@@ -346,7 +346,8 @@ function showPortraitEditor(draft=current().portrait) {
   if(!canEditPortrait())return;
   const owner={id:activeId,generation:cloudGeneration};
   const hasImage=Boolean(draft.dataUrl);
-  const content=()=>`<div class="portrait-editor${hasImage?'':' portrait-empty'}"><div>${portraitMarkup(draft,true)}<button type="button" class="button" data-icon="import" data-action="portrait-choose">${t(hasImage?'Trocar imagem':'Escolher imagem')}</button><button type="button" class="text-button portrait-remove-control" data-icon="trash" data-action="portrait-remove" ${hasImage?'':'disabled'}>${t('Remover retrato')}</button></div><div class="portrait-adjustments"><p>${t(hasImage?'Ajuste o zoom e a posição para enquadrar seu personagem.':'Escolha uma imagem para ajustar o enquadramento antes de salvar.')}</p>${[['zoom','Zoom',1,3,0.05],['x','Posição horizontal',0,100,1],['y','Posição vertical',0,100,1]].map(([key,name,min,max,step])=>`<label class="field"><span>${t(name)} <output data-portrait-output="${key}">${key==='zoom'?Number(draft[key]).toFixed(2)+'×':Math.round(draft[key])+'%'}</output></span><input type="range" data-portrait-crop="${key}" min="${min}" max="${max}" step="${step}" value="${draft[key]}" aria-label="${t(name)}" ${hasImage?'':'disabled'}></label>`).join('')}<p class="panel-note">${t('PNG, JPEG ou WebP, até 12 MB. A imagem é reduzida e salva com a ficha.')}</p><div class="dialog-actions"><button type="button" class="button primary" data-action="portrait-save" ${hasImage||current()?.portrait?.dataUrl?'':'disabled'}>${t('Salvar retrato')}</button><button type="button" class="button" data-action="portrait-cancel">${t('Cancelar')}</button></div></div></div>`;
+  const guidance=hasImage?'Ajuste o zoom e a posição para enquadrar seu personagem.':current()?.portrait?.dataUrl?'O retrato será removido ao salvar. Você também pode escolher outra imagem.':'Escolha uma imagem para ajustar o enquadramento antes de salvar.';
+  const content=()=>`<div class="portrait-editor${hasImage?'':' portrait-empty'}"><div>${portraitMarkup(draft,true)}<button type="button" class="button" data-icon="import" data-action="portrait-choose">${t(hasImage?'Trocar imagem':'Escolher imagem')}</button><button type="button" class="text-button portrait-remove-control" data-icon="trash" data-action="portrait-remove" ${hasImage?'':'disabled'}>${t('Remover retrato')}</button></div><div class="portrait-adjustments"><p>${t(guidance)}</p>${[['zoom','Zoom',1,3,0.05],['x','Posição horizontal',0,100,1],['y','Posição vertical',0,100,1]].map(([key,name,min,max,step])=>`<label class="field"><span>${t(name)} <output data-portrait-output="${key}">${key==='zoom'?Number(draft[key]).toFixed(2)+'×':Math.round(draft[key])+'%'}</output></span><input type="range" data-portrait-crop="${key}" min="${min}" max="${max}" step="${step}" value="${draft[key]}" aria-label="${t(name)}" ${hasImage?'':'disabled'}></label>`).join('')}<p class="panel-note">${t('PNG, JPEG ou WebP, até 12 MB. A imagem é reduzida e salva com a ficha.')}</p><div class="dialog-actions"><button type="button" class="button primary" data-action="portrait-save" ${hasImage||current()?.portrait?.dataUrl?'':'disabled'}>${t('Salvar retrato')}</button><button type="button" class="button" data-action="portrait-cancel">${t('Cancelar')}</button></div></div></div>`;
   showDialog(t('Ajustar retrato'),content());portraitDraft=structuredClone(draft);portraitOwner=owner;
   syncPortraitControls();
 }
@@ -525,7 +526,7 @@ document.addEventListener('click',e=>{
   if(action==='portrait-choose'){choosePortrait();return;}
   if(action==='portrait-cancel'){closeDialog();return;}
   if(action==='portrait-save'){if(canSavePortrait()){const removed=!portraitDraft.dataUrl;c.portrait=structuredClone(portraitDraft);save();renderIdentity();closeDialog();toast(t(removed?'Retrato removido.':'Retrato salvo.'));}return;}
-  if(action==='portrait-remove'){if(canEditPortrait()&&hasPortraitDraft()&&portraitDraft.dataUrl)showPortraitEditor({dataUrl:'',zoom:1,x:50,y:50});return;}
+  if(action==='portrait-remove'){if(canEditPortrait()&&hasPortraitDraft()&&portraitDraft.dataUrl){showPortraitEditor({dataUrl:'',zoom:1,x:50,y:50});document.querySelector('[data-action="portrait-choose"]')?.focus({preventScroll:true});}return;}
   if(action==='onboarding'){openOnboardingDialog();return;}
   if(action==='cloud-account'){openAccountDialog();return;}
   if(action==='settings'){openAccountDialog();return;}

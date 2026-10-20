@@ -77,6 +77,8 @@
   .identity-card:has(.character-portrait) .identity-fields input{font-size:14px}
   .identity-card:has(.character-portrait) .identity-name input{font-size:16px}
   .workspace .portrait-edit-control{width:44px;min-width:44px;height:44px;min-height:44px;padding:12px}
+  .workspace .portrait-edit-control,.workspace .portrait-edit-control:not(:disabled):hover{border:0;background:transparent;box-shadow:none}
+  .workspace .portrait-edit-control::before{content:'';inset:7px;z-index:-1;clip-path:none;border:1px solid var(--ink,#222);background:var(--paper,#ededE7)}
   .workspace .portrait-edit-control .button-symbol .icon{width:20px;height:20px}
   .portrait-editor{grid-template-columns:1fr;gap:17px}
   .portrait-editor .portrait-preview{max-width:150px}
