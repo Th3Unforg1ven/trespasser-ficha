@@ -9,16 +9,15 @@
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./sheet.css?v=ink-1">
-  <link rel="stylesheet" href="./landing.css?v=ink-1">
+  <link rel="stylesheet" href="./landing.css?v=scene-1">
   <link rel="stylesheet" href="./controls.css?v=ink-1">
-  <script type="module" src="./landing.js?v=ink-1"></script>
+  <script type="module" src="./landing.js?v=scene-1"></script>
   <script type="module" src="./app.js?v=ink-1"></script>
 </head>
 <body>
   <a class="skip-link" id="skip-link" href="#landing-title">Ir para o conteúdo</a>
-  <section id="landing" class="landing" data-art="castle" aria-labelledby="landing-title">
-    <div class="landing-backdrop" aria-hidden="true"></div>
-    <div class="landing-scene" aria-hidden="true"><img class="landing-art landing-art-castle" src="./assets/landing/castelo.png" alt="" fetchpriority="high"><img class="landing-art landing-art-cover" src="./assets/landing/capa.png" alt="" loading="lazy"></div>
+  <section id="landing" class="landing" aria-labelledby="landing-title">
+    <div class="landing-scene" aria-hidden="true"><picture><source media="(min-width: 621px)" srcset="./assets/landing/ruinas.png"><img class="landing-art" src="./assets/landing/castelo.png" alt="" fetchpriority="high"></picture></div>
     <div class="landing-shade" aria-hidden="true"></div>
     <header class="landing-header"><span class="landing-edition">REGISTRO DE PERSONAGENS <span>V2.1.3</span></span><span class="landing-header-mark" aria-hidden="true"></span></header>
     <div class="landing-content">
@@ -30,7 +29,7 @@
       <div class="landing-actions"><button type="button" id="landing-open" class="landing-primary" data-icon="record"><span class="button-label">Abrir minhas fichas</span></button><button type="button" id="landing-login" class="landing-secondary" data-icon="helm" data-action="cloud-login" disabled aria-busy="true"><span class="button-label">Entrar com Google</span></button></div>
       <button type="button" id="landing-guest" class="landing-guest" data-icon="torch"><span class="button-label">Continuar sem entrar</span></button>
     </div>
-    <footer class="landing-footer"><p>REGISTRO NÃO OFICIAL <span>·</span> TRESPASSER</p><div class="landing-art-picker" role="group" aria-label="Ilustração da tela inicial"><span class="landing-art-label">ILUSTRAÇÃO</span><button type="button" data-landing-art="castle" data-icon="castle" aria-pressed="true"><span class="button-label">Castelo</span></button><button type="button" data-landing-art="cover" data-icon="cover" aria-pressed="false"><span class="button-label">Capa</span></button></div></footer>
+    <footer class="landing-footer"><p>REGISTRO NÃO OFICIAL <span>·</span> TRESPASSER</p></footer>
   </section>
   <div class="workspace" id="record-workspace" hidden>
     <header class="topbar">

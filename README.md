@@ -84,7 +84,7 @@ Os documentos de referência são material de consulta do sistema. Não são nec
 
 A interface acompanha a ficha impressa: composição em três colunas, recursos com réguas no topo, molduras pretas com recortes, campos retangulares e papel claro. A identificação usa o logotipo incorporado ao PDF fornecido (Rulebook, página 1), sem alteração do arquivo da imagem.
 
-A tela inicial usa as duas artes fornecidas pelo usuário, em preto e branco e em tela cheia, com seleção manual entre Castelo e Capa. Os arquivos originais estão em `dist/assets/landing/`; a preferência visual é independente das fichas. O retorno do Google abre diretamente o registro e a mesma aba retoma a última tela usada.
+A tela inicial escolhe a arte pelo tamanho da tela: `dist/assets/landing/ruinas.png`, a gravura horizontal de ruínas góticas à beira do lago do livro (p. 258), acima de 620 px; o castelo vertical original fornecido pelo usuário em telas de até 620 px. A escolha é feita por `<picture>`, sem seletor ou preferência visual no navegador. O retorno do Google abre diretamente o registro e a mesma aba retoma a última tela usada.
 
 Botões e ícones seguem uma linguagem própria de gravura: silhuetas de tinta, molduras duplas, bordas recortadas e títulos góticos. Os ícones vetoriais são desenhos originais do projeto, incluindo grimório, elmo, tocha, espada, dados e pergaminhos. Os rótulos continuam visíveis, e os controles mantêm foco de teclado e estados de carregamento e indisponibilidade.
 

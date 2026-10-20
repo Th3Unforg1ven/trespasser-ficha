@@ -87,13 +87,10 @@ test('one ready login click reaches the existing delegated action; signed-in use
   assert.equal(f.nodes.get('#landing-login').attributes.get('aria-busy'),'true');
 });
 
-test('art selection is manual, accessible, and stored outside character data',()=>{
+test('an old cover preference cannot replace the responsive scene or affect opening sheets',()=>{
   const f=fixture({storedArt:'cover'});
-  assert.equal(f.nodes.get('#landing').dataset.art,'cover');
-  assert.equal(f.choices[1].attributes.get('aria-pressed'),'true');
-  f.choices[0].click();
-  assert.equal(f.nodes.get('#landing').dataset.art,'castle');
-  assert.equal(f.choices[0].attributes.get('aria-pressed'),'true');
-  assert.equal(f.choices[1].attributes.get('aria-pressed'),'false');
-  assert.deepEqual([...f.local.entries()],[['trespasser.landing.art.v1','castle']]);
+  assert.equal(f.nodes.get('#landing').dataset.art,undefined);
+  assert.deepEqual([...f.local.entries()],[['trespasser.landing.art.v1','cover']]);
+  f.nodes.get('#landing-open').click();
+  assert.equal(f.document.body.dataset.view,'workspace');
 });
