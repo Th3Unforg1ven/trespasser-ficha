@@ -1,0 +1,160 @@
+/* Printed signs, cut paper and engraved symbols. The rectangular hit area stays intact. */
+[hidden]{display:none!important}
+.workspace .button,.workspace .icon-button,.workspace .step-button,
+#utility-dialog .button,#utility-dialog .icon-button,
+.landing .landing-actions>button,.landing .landing-guest,.landing .landing-art-picker>button{
+  --control-paper:#f5f5f1;--control-ink:#161716;
+  position:relative;isolation:isolate;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  min-height:44px;padding:10px 16px;border:0;border-radius:0;box-shadow:none;background:transparent;color:var(--control-ink);
+  font-family:'Pirata One',Georgia,serif;font-size:20px;font-weight:400;line-height:1.1;letter-spacing:.15px;text-transform:none;text-decoration:none;
+  overflow:visible;vertical-align:middle;white-space:nowrap;transition:color .12s;cursor:pointer;
+}
+.workspace .button::before,.workspace .icon-button::before,.workspace .step-button::before,
+#utility-dialog .button::before,#utility-dialog .icon-button::before,
+.landing .landing-actions>button::before,.landing .landing-guest::before,.landing .landing-art-picker>button::before{
+  content:'';position:absolute;inset:0;z-index:-2;pointer-events:none;background:var(--control-ink);
+  clip-path:polygon(0 4px,10px 3px,12px 0,calc(100% - 11px) 1px,calc(100% - 8px) 3px,100% 2px,calc(100% - 1px) calc(100% - 7px),calc(100% - 5px) 100%,15px calc(100% - 1px),11px 100%,0 calc(100% - 5px),1px 52%);
+}
+.workspace .button::after,.workspace .icon-button::after,.workspace .step-button::after,
+#utility-dialog .button::after,#utility-dialog .icon-button::after,
+.landing .landing-actions>button::after,.landing .landing-guest::after,.landing .landing-art-picker>button::after{
+  content:'';position:absolute;inset:2px;z-index:-1;pointer-events:none;border:3px double var(--control-ink);
+  background:repeating-linear-gradient(130deg,transparent 0 2px,var(--control-ink) 2px 3px) right 3px bottom 2px/12px 6px no-repeat,var(--control-paper);
+  clip-path:polygon(0 2px,8px 1px,11px 0,calc(100% - 8px) 1px,100% 0,calc(100% - 1px) calc(100% - 5px),calc(100% - 3px) 100%,13px calc(100% - 1px),9px 100%,0 calc(100% - 3px));
+}
+.workspace .button.primary,.workspace .button.use-deed,#utility-dialog .button.primary,.workspace .dice-trigger{
+  --control-paper:#171817;--control-ink:#f5f5f1;color:var(--control-ink);background:transparent;
+}
+.workspace .button.destructive,#utility-dialog .button.destructive{--control-paper:#171817;--control-ink:#fff;color:var(--control-ink);background:transparent}
+.workspace .button:not(:disabled):hover,.workspace .icon-button:not(:disabled):hover,.workspace .step-button:not(:disabled):hover,
+#utility-dialog .button:not(:disabled):hover,#utility-dialog .icon-button:not(:disabled):hover{
+  --control-paper:#deded8;--control-ink:#101110;color:var(--control-ink);background:transparent;
+}
+.workspace .button.primary:not(:disabled):hover,.workspace .dice-trigger:not(:disabled):hover,#utility-dialog .button.primary:not(:disabled):hover{--control-paper:#333530;--control-ink:#fff}
+.workspace :is(.button,.icon-button,.step-button):focus-visible,#utility-dialog :is(.button,.icon-button):focus-visible{
+  outline:2px solid #161716;outline-offset:4px;
+}
+.landing :is(.landing-actions>button,.landing-guest,.landing-art-picker>button):focus-visible{outline:2px solid #f5f5f1;outline-offset:5px}
+:is(.button,.icon-button,.step-button,.landing-actions>button,.landing-guest,.landing-art-picker>button):focus-visible>.button-label{text-decoration:underline;text-underline-offset:4px}
+.workspace button:disabled,#utility-dialog button:disabled,.landing button:disabled{opacity:.45;cursor:not-allowed}
+.workspace :is(.button,.icon-button)[aria-busy="true"]>.button-symbol,.landing button[aria-busy="true"]>.button-symbol{opacity:.55}
+.button-symbol{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;position:relative;line-height:1}
+.button-symbol .icon{display:block;width:24px;height:24px;color:inherit;flex:none}
+.button-label{position:relative;font:inherit;line-height:1.12}
+.workspace .dice-trigger>.button-label{display:inline;font:inherit}
+.workspace .dice-trigger>.button-symbol{display:inline-flex}
+.workspace .home-button>.button-label{font:inherit}
+.workspace .icon-button,#utility-dialog .icon-button{width:44px;min-width:44px;height:44px;padding:9px;gap:0}
+.workspace .top-actions>.print-button{width:44px;min-width:44px;padding:9px}
+.workspace .print-button>.button-label{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+.workspace .icon-button>.button-symbol .icon,#utility-dialog .icon-button>.button-symbol .icon{width:24px;height:24px}
+.workspace .button.small,#utility-dialog .button.small{min-height:38px;padding:8px 13px;font-size:18px}
+#utility-dialog .button{max-width:100%;white-space:normal;text-align:center}
+#utility-dialog .button>.button-label{min-width:0}
+.workspace .step-button{width:30px;min-width:30px;min-height:30px;height:30px;padding:5px;gap:0}
+.workspace .step-button::after{inset:2px;border-width:1px;background:var(--control-paper)}
+.workspace .step-button>.button-symbol .icon{width:16px;height:16px}
+.workspace .section-heading>.button{font-size:17px;padding:9px 14px;min-height:39px}
+.workspace .top-actions>.button,.workspace .archive-tools>.button{font-size:18px;padding:9px 13px;min-height:44px}
+.workspace .text-button,#utility-dialog .text-button,.workspace .page-footer button{
+  display:inline-flex;align-items:center;gap:7px;min-height:38px;font-family:Lusitana,Georgia,serif;font-size:15px;font-weight:700;text-transform:none;letter-spacing:0;
+  text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:5px;color:#242521;line-height:1.3;
+}
+.workspace .text-button .icon,.workspace .page-footer button .icon{width:20px;height:20px}
+.workspace .nav-item>.nav-icon{width:24px;height:24px;flex:none}
+.workspace .nav-item{gap:9px}
+.workspace .nav-item:focus-visible{outline:2px solid #111;outline-offset:-5px;text-decoration:underline;text-underline-offset:4px}
+.landing .landing-actions{gap:13px}
+.landing .landing-actions>button{min-height:57px;padding:13px 23px;font-size:25px;gap:12px;white-space:normal;text-align:left}
+.landing .landing-actions>.landing-primary{--control-paper:#e9e9e2;--control-ink:#111310;color:var(--control-ink);background:transparent}
+.landing .landing-actions>.landing-secondary{--control-paper:#0e100e;--control-ink:#e0e1d7;color:var(--control-ink);background:transparent}
+.landing .landing-actions>button>.button-label,.landing .landing-actions>.landing-primary>.button-label{font:inherit;line-height:1.1}
+.landing .landing-actions>button>.button-symbol .icon{width:29px;height:29px}
+.landing .landing-actions>.landing-primary:not(:disabled):hover{--control-paper:#fff;--control-ink:#111310;background:transparent}
+.landing .landing-actions>.landing-secondary:not(:disabled):hover{--control-paper:#292d26;--control-ink:#fff;background:transparent}
+.landing .landing-guest{--control-paper:#0b0e0b;--control-ink:#aeb4a4;min-height:43px;font-family:Lusitana,Georgia,serif;font-size:15px;font-weight:400;margin-top:16px;padding:8px 13px;gap:9px}
+.landing .landing-guest::before{clip-path:polygon(0 6px,calc(100% - 6px) 1px,100% calc(100% - 4px),5px 100%)}
+.landing .landing-guest::after{inset:1px;border:0;background:var(--control-paper);clip-path:polygon(0 6px,calc(100% - 6px) 1px,100% calc(100% - 4px),5px 100%)}
+.landing .landing-guest .icon{width:21px;height:24px}
+.landing .landing-guest:not(:disabled):hover{--control-ink:#f7f8ee;color:var(--control-ink)}
+.landing .landing-art-picker>button{--control-paper:#0c0f0c;--control-ink:#969f8d;min-height:40px;padding:8px 13px;font-size:18px;gap:6px;color:var(--control-ink);background:transparent}
+.landing .landing-art-picker>button::after{border-width:1px;background:var(--control-paper)}
+.landing .landing-art-picker>button>.button-label{display:inline;font:inherit;color:inherit;line-height:1}
+.landing .landing-art-picker>button>.button-symbol{display:inline-flex;color:inherit}
+.landing .landing-art-picker>button .icon{width:20px;height:20px}
+.landing .landing-art-picker>button[aria-pressed="true"]{--control-paper:#dedfd3;--control-ink:#11160f;color:var(--control-ink);background:transparent}
+.landing .landing-art-picker>button:not(:disabled):hover{--control-paper:#30372b;--control-ink:#fff;color:var(--control-ink)}
+.landing .landing-art-label{font-family:Lusitana,Georgia,serif;font-size:10px;letter-spacing:1px}
+.landing .landing-edition{font-family:Lusitana,Georgia,serif;font-size:11px;letter-spacing:1.1px}
+.landing .landing-edition>span{font-family:Lusitana,Georgia,serif;font-size:10px}
+.landing .landing-kicker{font-family:Lusitana,Georgia,serif;font-size:12px;letter-spacing:2.3px}
+.landing .landing-header-mark{position:relative;width:30px;height:34px;border:1px solid #d4d8cc;clip-path:polygon(10% 0,90% 0,100% 22%,88% 87%,50% 100%,12% 87%,0 22%)}
+.landing .landing-header-mark::before{content:'';position:absolute;top:4px;left:13px;width:3px;height:22px;background:#d4d8cc;clip-path:polygon(50% 0,100% 25%,70% 80%,100% 100%,0 100%,30% 80%,0 25%)}
+.landing .landing-header-mark::after{content:'';position:absolute;top:17px;left:6px;width:16px;height:2px;background:#d4d8cc;transform:rotate(-8deg)}
+.landing .landing-rule>span{display:block;width:7px;height:7px;left:0;padding:0;top:50%;transform:translateY(-50%) rotate(45deg);background:#d9dcd0;border:1px solid #929a85;box-shadow:0 0 0 5px #080909}
+@media(max-width:1000px){.workspace .top-actions>.button,.workspace .archive-tools>.button{font-size:17px;padding:9px 11px;gap:6px}.workspace .button-symbol .icon{width:22px;height:22px}.landing .landing-actions>button{font-size:23px;padding:13px 19px}.workspace .archive-tools>.eyebrow{display:none}}
+@media(max-width:760px){
+  .workspace .top-actions{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;justify-content:stretch;width:100%}
+  .workspace .top-actions>.button,.workspace .top-actions>.icon-button{width:100%;min-width:0;min-height:64px;height:auto;padding:8px 4px;font-size:17px;gap:4px;flex-direction:column;margin:0}
+  .workspace .top-actions>.button>.button-symbol .icon,.workspace .top-actions>.icon-button>.button-symbol .icon{width:24px;height:24px}
+  .workspace .top-actions>.print-button>.button-label{position:static;width:auto;height:auto;margin:0;overflow:visible;clip:auto;white-space:normal;line-height:1.1}
+  .workspace .archive-tools>.home-button{min-width:44px;width:44px;height:44px;padding:9px!important}
+  .workspace .home-button>.button-label{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+  .workspace .archive-tools .add-character{min-height:44px;font-size:19px;padding:9px 12px;gap:6px}
+  .workspace .archive-tools .mobile-character-choice{flex:1;max-width:none;width:auto;min-width:0}
+  .workspace .mobile-character-choice select{min-height:44px}
+  .workspace .archive-tools{gap:9px;width:100%}
+  .workspace .section-heading>.button{font-size:16px;padding:8px 12px;gap:6px;min-height:40px}
+  .workspace .section-heading>.button .icon{width:20px;height:20px}
+  .workspace .nav-item{gap:7px;font-size:20px}
+  .workspace .nav-item>small{display:none}
+  .workspace .nav-item>.nav-icon{width:21px;height:21px}
+}
+@media(max-width:620px){
+  .landing .landing-content{padding-top:clamp(80px,12svh,120px)}
+  .landing .landing-actions{display:grid;grid-template-columns:1fr;width:100%;gap:10px}
+  .landing .landing-actions>button{font-size:23px;min-height:53px;padding:11px 18px;justify-content:center}
+  .landing .landing-actions>button>.button-symbol .icon{width:27px;height:27px}
+  .landing .landing-guest{min-height:44px;font-size:14px;padding:8px 13px;margin-top:13px}
+  .landing .landing-art-picker{gap:6px}
+  .landing .landing-art-picker>button{min-height:44px;padding:8px 11px;font-size:18px;gap:5px}
+  .landing .landing-edition{font-size:9px;gap:12px}
+  .landing .landing-edition>span{font-size:9px;padding-left:12px}
+  .landing .landing-kicker{font-size:10px;letter-spacing:1.7px}
+  .landing .landing-footer{gap:12px}
+}
+@media(max-width:420px){
+  .workspace .top-actions{gap:5px}
+  .workspace .top-actions>.button,.workspace .top-actions>.icon-button{font-size:16px;min-height:62px}
+  .workspace .archive-tools{gap:7px}
+  .workspace .archive-tools .add-character{padding-left:9px;padding-right:11px}
+  .workspace .nav-item{font-size:19px;gap:3px;padding:9px 2px;min-height:65px;flex-direction:column}
+  .workspace #navigation .nav-item{font-size:14px}
+  .workspace .nav-item>.nav-icon{width:22px;height:22px}
+  .workspace .step-button{width:24px;min-width:24px;min-height:28px;height:28px;padding:4px}
+  .workspace .resource-control{display:grid;grid-template-columns:24px minmax(0,1fr) 24px;column-gap:1px;row-gap:2px;align-items:center}
+  .workspace .resource-control>.step-button{width:24px;min-width:24px;margin:0}
+  .workspace .resource-control>.step-button:first-child{grid-column:1;grid-row:1}
+  .workspace .resource-control>.step-button:last-child{grid-column:3;grid-row:1;margin:0}
+  .workspace .resource-control>label{grid-column:2;grid-row:1;min-width:0;width:100%;margin:0}
+  .workspace .resource-control>label>input{width:100%;min-width:0;max-width:100%;padding:0;font-size:23px}
+  .workspace .resource-control>.resource-max{grid-column:1/-1;grid-row:2;justify-self:center;margin:0;font-size:12px;line-height:1.2}
+  .workspace .section-heading>.button{font-size:15px;padding:8px 10px}
+  .workspace .section-heading>.button .icon{width:17px;height:20px}
+  .landing .landing-actions>button{font-size:22px}
+  .landing .landing-art-picker>button{font-size:17px;padding-left:9px;padding-right:9px}
+  .landing .landing-art-picker>button .icon{width:18px;height:20px}
+  .landing .landing-footer>p{font-size:6px;max-width:80px}
+}
+@media(max-width:360px){
+  .workspace #navigation .nav-item{font-size:12px}
+  .workspace .top-actions{grid-template-columns:repeat(6,minmax(0,1fr))}
+  .workspace .top-actions>button:nth-child(-n+3){grid-column:span 2}
+  .workspace .top-actions>button:nth-child(n+4){grid-column:span 3}
+  .workspace .top-actions>.button,.workspace .top-actions>.icon-button{font-size:16px;min-height:50px;padding:7px 6px;gap:3px}
+  .workspace .top-actions>.button>.button-symbol .icon,.workspace .top-actions>.icon-button>.button-symbol .icon{width:22px;height:22px}
+  .workspace .top-actions>.button>.button-label{max-width:100%;min-width:0;letter-spacing:0}
+}
+@media(prefers-reduced-motion:reduce){.workspace button,.landing button,#utility-dialog button{transition:none}}
+@media(forced-colors:active){.workspace .button,.workspace .icon-button,.workspace .step-button,#utility-dialog .button,#utility-dialog .icon-button,.landing .landing-actions>button,.landing .landing-guest,.landing .landing-art-picker>button{border:1px solid ButtonText;color:ButtonText;background:ButtonFace}.workspace button::before,.workspace button::after,.landing button::before,.landing button::after,#utility-dialog button::before,#utility-dialog button::after{display:none}}
+@media print{.button-symbol,.home-button{display:none!important}.workspace .button::before,.workspace .button::after,.workspace .icon-button::before,.workspace .icon-button::after,.workspace .step-button::before,.workspace .step-button::after{display:none!important}}

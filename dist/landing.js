@@ -1,3 +1,5 @@
+import { setButtonLabel, mountButtonIcons } from './icons.js?v=ink-1';
+
 const VIEW_KEY='trespasser.view.v1';
 const ART_KEY='trespasser.landing.art.v1';
 
@@ -12,10 +14,11 @@ export function initialView(location, savedView) {
   return isAuthReturn(location) || savedView==='workspace' ? 'workspace' : 'home';
 }
 
-export function setupLanding({document,window,sessionStorage,localStorage,location}) {
+export function setupLanding({document,window,sessionStorage,localStorage,location},{setLabel=setButtonLabel,mountIcons=mountButtonIcons}={}) {
   const landing=document.querySelector('#landing');
   const workspace=document.querySelector('#record-workspace');
   if(!landing||!workspace)return;
+  mountIcons(document);
   const read=(storage,key)=>{try{return storage.getItem(key);}catch{return null;}};
   const write=(storage,key,value)=>{try{storage.setItem(key,value);}catch{/* Navigation also works without browser storage. */}};
   const setView=(view,focus=true)=>{
@@ -46,7 +49,7 @@ export function setupLanding({document,window,sessionStorage,localStorage,locati
     const signedIn=Boolean(event.detail?.signedIn);
     const login=document.querySelector('#landing-login');
     const ready=Boolean(event.detail?.ready);
-    login.textContent=signedIn?'Minha conta':'Entrar com Google';
+    setLabel(login,signedIn?'Minha conta':'Entrar com Google','helm');
     login.dataset.action=signedIn?'cloud-account':'cloud-login';
     login.disabled=!ready;
     login.setAttribute('aria-busy',String(!ready));

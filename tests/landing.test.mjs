@@ -20,7 +20,9 @@ function fixture({location=url('./'),savedView=null,storedArt=null}={}){
   const windowEvents=new Map();
   const document={readyState:'complete',body:{dataset:{}},querySelector:selector=>nodes.get(selector),querySelectorAll:()=>choices};
   const window={scrollTo(){},addEventListener:(type,fn)=>windowEvents.set(type,fn)};
-  const api=setupLanding({document,window,location,sessionStorage:storage(session),localStorage:storage(local)});
+  const api=setupLanding({document,window,location,sessionStorage:storage(session),localStorage:storage(local)},{
+    mountIcons(){},setLabel(button,text,name){button.textContent=text;button.dataset.icon=name;}
+  });
   return{api,nodes,document,choices,session,local,windowEvents,delegatedActions};
 }
 

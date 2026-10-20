@@ -5,6 +5,7 @@ import * as model from '../dist/model.js';
 import * as uiState from '../dist/cloud-ui-state.js';
 import { CloudSync } from '../dist/cloud-sync.js';
 import { acquireAccountLock } from '../dist/account-lock.js';
+import { icon, setButtonLabel, mountButtonIcons } from '../dist/icons.js';
 
 const KEY='trespasser.record.v1';
 const appSource=(await readFile(new URL('../dist/app.js',import.meta.url),'utf8')).replace(/^import .*;\r?\n/gm,'');
@@ -13,11 +14,14 @@ const flush=async()=>{for(let i=0;i<24;i++)await Promise.resolve();};
 const session=id=>id?{user:{id,email:`${id}@example.test`}}:null;
 
 class Element {
-  constructor(){this.dataset={};this.listeners=new Map();this.innerHTML='';this.textContent='';this.open=false;this.disabled=false;this.type='';this.tagName='DIV';}
+  constructor(){this.dataset={};this.listeners=new Map();this.children=[];this.innerHTML='';this.textContent='';this.open=false;this.disabled=false;this.type='';this.tagName='DIV';}
   addEventListener(name,fn){this.listeners.set(name,fn);}
   setAttribute(name,value){this[name]=value;}
   removeAttribute(name){delete this[name];}
-  replaceChildren(...nodes){this.textContent=nodes.map(n=>n.textContent||'').join('');}
+  hasAttribute(name){return name in this;}
+  querySelector(){return null;}
+  querySelectorAll(){return [];}
+  replaceChildren(...nodes){this.children=nodes;this.textContent=nodes.map(n=>n.textContent||'').join('');}
   append(...nodes){this.textContent+=nodes.map(n=>n.textContent||'').join('');}
   showModal(){this.open=true;}
   close(){this.open=false;}
@@ -39,8 +43,9 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
   const document={hidden:false,activeElement:null,
     querySelector:selector=>elements.get(selector)||null,
     querySelectorAll:selector=>selector.startsWith('#export-button')?[elements.get('#export-button')]:[],
-    createElement:()=>new Element(),createTextNode:text=>({textContent:text}),
+    createElement:()=>{const element=new Element();element.ownerDocument=document;return element;},createTextNode:text=>({textContent:text}),
     addEventListener:(event,listener)=>documentListeners.set(event,listener)};
+  for(const element of elements.values())element.ownerDocument=document;
   let nextTimer=0,authListener,resolveSession,authUser=initialUser,inCallback=false;
   const timers=new Map(),intervals=new Map(),calls=[];
   const auth={
@@ -59,7 +64,7 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
     async save(sent){assert.equal(inCallback,false);calls.push({type:'save',user:authUser});const rows=remote.get(authUser)||[];const old=rows.find(r=>r.id===sent.id);if((old?.revision||0)!==sent.revision)return null;const row={id:sent.id,data:structuredClone(sent.data),revision:sent.revision+1,deleted_at:sent.deleted?'2026-10-19T12:00:00Z':null};remote.set(authUser,[...rows.filter(r=>r.id!==row.id),row]);return row;}
   };
   const window={addEventListener:(event,listener)=>windowListeners.set(event,listener),dispatchEvent:event=>windowListeners.get(event.type)?.(event)};
-  const dependencies={...model,...uiState,CloudSync,acquireAccountLock,createCloudClient:()=>({auth,adapter}),cloudConfig:{},navigator:{locks},
+  const dependencies={...model,...uiState,CloudSync,acquireAccountLock,icon,setButtonLabel,mountButtonIcons,createCloudClient:()=>({auth,adapter}),cloudConfig:{},navigator:{locks},
     preparePrint(){},prepareExport(){throw new Error('Export is outside this auth test');},
     document,window,localStorage,location:{href:'https://example.test/trespasser-ficha/?ignored=1#ignored',reload(){calls.push({type:'reload'});}},
     setTimeout:(fn,delay)=>{const id=++nextTimer;timers.set(id,{fn,delay});return id;},clearTimeout:id=>timers.delete(id),
@@ -123,6 +128,19 @@ test('login returns to a clean project-root URL and export becomes available aft
   assert.equal(f.calls.find(call=>call.type==='login').options.options.redirectTo,'https://example.test/trespasser-ficha/');
   f.emit('account-a');await f.runTimers();
   assert.equal(f.elements.get('#export-button').disabled,false);
+});
+
+test('account labels retain their decorative symbol through sign-in and sign-out',async()=>{
+  const f=fixture();await flush();
+  const button=f.elements.get('#account-button');
+  assert.equal(button.textContent,'Entrar');
+  assert.match(button.children[0].innerHTML,/aria-hidden="true"/);
+  f.emit('account-a');await f.runTimers();
+  assert.equal(button.children[1].textContent,'Conta');
+  assert.match(button.children[0].innerHTML,/icon--helm/);
+  await f.app.logoutCloud();
+  assert.equal(button.children[1].textContent,'Entrar');
+  assert.equal(button.dataset.icon,'helm');
 });
 
 test('a stalled session check releases the account dialog and a later valid auth event still works',async()=>{

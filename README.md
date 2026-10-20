@@ -86,4 +86,6 @@ A interface acompanha a ficha impressa: composição em três colunas, recursos 
 
 A tela inicial usa as duas artes fornecidas pelo usuário, em preto e branco e em tela cheia, com seleção manual entre Castelo e Capa. Os arquivos originais estão em `dist/assets/landing/`; a preferência visual é independente das fichas. O retorno do Google abre diretamente o registro e a mesma aba retoma a última tela usada.
 
+Botões e ícones seguem uma linguagem própria de gravura: silhuetas de tinta, molduras duplas, bordas recortadas e títulos góticos. Os ícones vetoriais são desenhos originais do projeto, incluindo grimório, elmo, tocha, espada, dados e pergaminhos. Os rótulos continuam visíveis, e os controles mantêm foco de teclado e estados de carregamento e indisponibilidade.
+
 Lusitana é usada no corpo e Pirata One nos títulos, com preferência por Boucherie Block caso já esteja instalada. Boucherie Block e Nexa Rust são indicadas pelo guia, mas seus arquivos comerciais não foram extraídos. As fontes abertas estão hospedadas localmente, com os avisos SIL OFL em `dist/assets/fonts/`. Fontes: repositório oficial Google Fonts, famílias [Pirata One](https://github.com/google/fonts/tree/main/ofl/pirataone) e [Lusitana](https://github.com/google/fonts/tree/main/ofl/lusitana).
