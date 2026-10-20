@@ -12,9 +12,9 @@
 .settings-language .panel-note{font-size:12px;line-height:1.5}
 
 .resource{display:flex;flex-direction:column}
-.resource-help{position:relative;display:flex;align-items:flex-start;justify-content:center;flex:1;width:100%;min-height:44px;padding:0 15px 0 0;border:0;color:inherit;background:transparent;cursor:help}
+.resource-help{position:relative;display:flex;align-items:flex-start;justify-content:center;flex:1;width:100%;min-height:44px;padding:0;border:0;color:inherit;background:transparent;cursor:help}
 .resource-help>span:first-child{display:block;min-width:0}
-.resource-help-mark{position:absolute;right:1px;top:1px;display:inline-flex;align-items:center;justify-content:center;width:12px;height:15px;border-bottom:1px solid currentColor;font-family:Georgia,serif;font-size:11px;font-weight:700;line-height:1;opacity:.7}
+.resource-help-mark{position:absolute;right:1px;bottom:3px;display:inline-flex;align-items:center;justify-content:center;width:12px;height:15px;border-bottom:1px solid currentColor;font-family:Georgia,serif;font-size:11px;font-weight:700;line-height:1;opacity:.7}
 .resource-help:hover .resource-help-mark,.resource-help:focus-visible .resource-help-mark{opacity:1}
 .resource-help:focus-visible{outline:2px solid currentColor;outline-offset:3px}
 #utility-dialog .resource-guide p{line-height:1.65}
@@ -102,6 +102,7 @@
   .plights-grid{gap:0 14px}
 }
 @media(max-width:360px){
+  .resource-help{font-size:14px}
   .identity-card:has(.character-portrait){grid-template-columns:112px minmax(0,1fr);gap:11px;padding:12px}
 }
 @media print{
