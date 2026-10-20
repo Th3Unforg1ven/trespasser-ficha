@@ -1,6 +1,11 @@
 import { ATTRS, SKILLS, createCharacter, derive, normalizeCharacter, rollDice } from './model.js';
 import { preparePrint } from './print.js';
 import { prepareExport } from './export-bundle.js';
+import { createCloudClient } from './cloud-client.js';
+import { cloudConfig } from './cloud-config.js';
+import { CloudSync } from './cloud-sync.js';
+import { isPristineCharacter, localMigrationCandidates, mergeLocalCharacters } from './cloud-ui-state.js';
+import { acquireAccountLock } from './account-lock.js';
 
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -16,6 +21,13 @@ const paths = { person:'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 9v-2a7 7 0 0 1 14
 const icon = (name,cls='') => `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name] || paths.dice}"/></svg>`;
 let records = [], activeId, tab = 'character', saveError = false, rollHistory = [];
 let exportBusy = false, dialogVersion = 0, exportUrls = [];
+let cloudConnection, cloudUser = null, cloudEngine = null, cloudGeneration = 0;
+let cloudReady = false, cloudPlaceholderId = null, cloudSyncTimer, cloudPollTimer;
+let cloudStatus = { state:'local', pending:0 }, authReady = false, authBusy = false, accountProblem = '';
+let accountDialogActive = false, authEventRevision = 0, guestBackup;
+let migrationSessionIds = new Set();
+let cloudEditError = '';
+let cloudAccountLock = null, cloudBlockedReason = '';
 try {
   const saved = localStorage.getItem(KEY);
   if (saved) {
@@ -37,14 +49,224 @@ function setAt(obj,path,value) {
   keys.slice(0,-1).forEach(k=>target=target[k]); target[keys.at(-1)] = value;
 }
 function save() {
+  if (cloudUser) {
+    if (!cloudReady || !cloudEngine) return;
+    try {
+      const snapshot = cloudRecords();
+      if (snapshot.length && cloudPlaceholderId) { records=snapshot;cloudPlaceholderId=null; }
+      cloudEditError='';
+      onCloudStatus({state:'pending',pending:Math.max(1,cloudStatus.pending||0)});
+      cloudEngine.setRecords(snapshot, snapshot.some(c=>c.id===activeId) ? activeId : null);
+      clearTimeout(cloudSyncTimer);
+      cloudSyncTimer=setTimeout(syncCloud,700);
+    } catch {
+      cloudEditError='Não foi possível guardar a edição · reduza a ficha ou exporte uma cópia';
+      onCloudStatus({state:'error',pending:1,message:cloudEditError});
+      toast('Não foi possível guardar a edição. Use Exportar para preservar esta ficha.',true);
+    }
+    return;
+  }
   if (saveError) { $('#save-status').textContent='Salvamento indisponível · exporte uma cópia'; return; }
   try {
     localStorage.setItem(KEY, JSON.stringify({version:1, activeId,characters:records}));
-    $('#save-status').innerHTML='<span class="status-dot"></span>Salvo neste navegador';
+    setSaveStatus('Salvo neste navegador');
   } catch {
     $('#save-status').textContent='Não foi possível salvar · exporte uma cópia';
     toast('O navegador não conseguiu salvar. Use Exportar para guardar seus dados.',true);
   }
+}
+function setSaveStatus(message, state='local') {
+  const status=$('#save-status');
+  status.dataset.state=state;
+  status.replaceChildren();
+  const dot=document.createElement('span');dot.className='status-dot';dot.setAttribute('aria-hidden','true');
+  status.append(dot,document.createTextNode(message));
+}
+function cloudRecords() {
+  return records.filter(c=>c.id!==cloudPlaceholderId || !isPristineCharacter(c));
+}
+function setCloudLoading(loading) {
+  $('#main').inert=loading;
+  $('#main').setAttribute('aria-busy',String(loading));
+  for (const selector of ['#add-character','#new-character','#mobile-new','#import-button','#mobile-character-select']) $(selector).disabled=loading;
+  syncExportButtons();
+}
+function migratedLocalIds() {
+  if (!cloudUser) return [];
+  try { const ids=JSON.parse(localStorage.getItem(`${KEY}.migrated.${cloudUser.id}`)||'[]');return [...new Set([...migrationSessionIds,...(Array.isArray(ids)?ids.filter(id=>typeof id==='string'):[])])]; }
+  catch { return [...migrationSessionIds]; }
+}
+function pendingLocalCharacters() {
+  if (cloudEditError || hasUncachedEdits()) return [];
+  return localMigrationCandidates(guestBackup?.records||[],cloudRecords(),migratedLocalIds());
+}
+function hasUncachedEdits() { return cloudStatus.pending>0 && cloudStatus.localSaved===false; }
+function accountContent() {
+  if (!authReady) return '<p role="status">Verificando sua conta…</p>';
+  if (!cloudConnection) return '<p role="alert">O acesso à conta está indisponível. Suas fichas continuam salvas neste navegador. Recarregue a página para tentar novamente.</p>';
+  const problem=accountProblem?`<p class="inline-warning" role="alert">${esc(accountProblem)}</p>`:'';
+  if (!cloudUser) return `<p>Entre com a mesma conta no celular e no computador para abrir suas fichas privadas e continuar de onde parou.</p>${problem}<div class="dialog-actions"><button class="button primary" data-action="cloud-login" ${authBusy?'disabled aria-busy="true"':''}>${authBusy?'Abrindo login…':'Entrar com Google'}</button></div><p class="panel-note">Sem entrar, as fichas ficam apenas neste navegador. Ao entrar, você poderá salvar suas fichas locais na conta.</p>`;
+  const local=pendingLocalCharacters(),unsafe=hasUncachedEdits();
+  return `<p class="account-identity"><span class="eyebrow">SUA CONTA</span><strong>${esc(cloudUser.email||'Conta conectada')}</strong></p><p>Suas fichas ficam privadas nesta conta. Entre com o mesmo Google em outro dispositivo para continuar a edição.</p><p class="account-sync-status" role="status">${esc(cloudStatusLabel())}</p>${problem}<div class="dialog-actions account-actions"><button class="button primary" data-action="cloud-sync" ${!cloudReady||cloudStatus.state==='syncing'||cloudEditError?'disabled':''}>Sincronizar agora</button><button class="button" data-action="cloud-logout" ${authBusy||cloudEditError||unsafe?'disabled':''} ${authBusy?'aria-busy="true"':''}>Sair deste dispositivo</button>${cloudEditError||unsafe?'<button class="button" data-action="export">Exportar uma cópia</button>':''}</div>${local.length?`<div class="local-migration"><h3>Fichas deste navegador</h3><p>${local.length===1?'Há uma ficha local que você pode salvar':'Há '+local.length+' fichas locais que você pode salvar'} na sua conta. A cópia local será mantida.</p><button class="button" data-action="cloud-migrate" ${!cloudReady||authBusy?'disabled':''}>Salvar minhas fichas locais na conta</button></div>`:''}<p class="panel-note">${cloudEditError?'Essas edições ainda não foram guardadas. Exporte uma cópia e reduza o conteúdo da ficha antes de sair.':unsafe?'As edições estão somente na memória desta página. Mantenha-a aberta até aparecer “Salvo online” ou exporte uma cópia.':cloudStatus.pending?'Há alterações pendentes. Se sair agora, elas ficam guardadas neste navegador para sincronizar quando você entrar novamente.':'O salvamento é automático. PDF e JSON continuam disponíveis como cópias independentes.'}</p>`;
+}
+function openAccountDialog() { showDialog(cloudUser?'Sua conta':'Salvar fichas online',accountContent());accountDialogActive=true; }
+function updateAccountControls(refreshDialog=false) {
+  const button=$('#account-button');
+  button.textContent=cloudUser?'Conta':'Entrar';
+  button.title=cloudUser?'Gerenciar conta e sincronização':'Entrar para salvar suas fichas online';
+  if (accountDialogActive && $('#utility-dialog').open) {
+    if (refreshDialog) { $('#dialog-title').textContent=cloudUser?'Sua conta':'Salvar fichas online';$('#dialog-content').innerHTML=accountContent(); }
+    else {
+      const status=$('#dialog-content .account-sync-status');if(status)status.textContent=cloudStatusLabel();
+      const sync=$('[data-action="cloud-sync"]');if(sync)sync.disabled=!cloudReady||cloudStatus.state==='syncing'||Boolean(cloudEditError);
+    }
+  }
+}
+function cloudStatusLabel() {
+  if (cloudBlockedReason) return cloudBlockedReason;
+  if (!cloudReady) return 'Carregando suas fichas…';
+  const labels={syncing:'Sincronizando com sua conta…',synced:'Salvo online',offline:'Sem conexão · alterações pendentes neste navegador',error:'Sincronização pendente · tente novamente'};
+  return ['error','offline'].includes(cloudStatus.state) && cloudStatus.message?cloudStatus.message:labels[cloudStatus.state]||'Salvo neste dispositivo · sincronização pendente';
+}
+function onCloudStatus(status) {
+  const wasUnsafe=hasUncachedEdits();
+  if (cloudEditError) status={state:'error',message:cloudEditError,pending:1};
+  cloudStatus={...status,localSaved:status.localSaved??cloudStatus.localSaved};
+  setSaveStatus(cloudStatusLabel(),status.state);
+  updateAccountControls(wasUnsafe!==hasUncachedEdits());
+}
+function applyCloudSnapshot(snapshot) {
+  if (cloudEditError) return;
+  const incoming=snapshot.records.map(normalizeCharacter);
+  const incomingId=incoming.some(c=>c.id===snapshot.activeId)?snapshot.activeId:incoming[0]?.id;
+  if (JSON.stringify(incoming)===JSON.stringify(cloudRecords()) && (incomingId===activeId || !incoming.length&&cloudPlaceholderId===activeId)) return;
+  records=incoming;
+  cloudPlaceholderId=null;
+  if (!records.length) { const blank=createCharacter();records=[blank];cloudPlaceholderId=blank.id; }
+  activeId=incomingId||records[0].id;
+  render();
+}
+async function syncCloud() {
+  if (!cloudReady || !cloudEngine || !cloudUser || cloudEditError) return;
+  try { await cloudEngine.sync(); }
+  catch { if(cloudUser)setSaveStatus('Sincronização pendente · tente novamente','error'); }
+}
+function stopCloud() {
+  cloudGeneration+=1;
+  clearTimeout(cloudSyncTimer);clearInterval(cloudPollTimer);
+  cloudEngine?.stop();cloudEngine=null;cloudReady=false;cloudPlaceholderId=null;cloudEditError='';
+  cloudAccountLock?.release();cloudAccountLock=null;cloudBlockedReason='';
+}
+function restoreGuest() {
+  if (guestBackup) {
+    records=structuredClone(guestBackup.records);activeId=guestBackup.activeId;saveError=guestBackup.saveError;
+    try {
+      const saved=JSON.parse(localStorage.getItem(KEY)||'null');
+      if(saved?.characters?.length) { records=saved.characters.map(normalizeCharacter);activeId=records.some(c=>c.id===saved.activeId)?saved.activeId:records[0].id; }
+    } catch { saveError=true; }
+  }
+  render();
+  setSaveStatus(saveError?'Salvamento indisponível · exporte uma cópia':'Salvo neste navegador',saveError?'error':'local');
+}
+async function attachSession(session) {
+  const user=session?.user||null;
+  if ((user?.id||null)===(cloudUser?.id||null)) { if(user)cloudUser=user;updateAccountControls(true);return; }
+  if ($('#utility-dialog').open&&!accountDialogActive) closeDialog();
+  if (!cloudUser) guestBackup={records:structuredClone(records),activeId,saveError};
+  stopCloud();cloudUser=user;authBusy=false;accountProblem='';migrationSessionIds=new Set();
+  if (!user) {setCloudLoading(false);restoreGuest();updateAccountControls(true);return;}
+  const generation=cloudGeneration;
+  records=[createCharacter()];activeId=records[0].id;cloudPlaceholderId=activeId;render();
+  setCloudLoading(true);setSaveStatus('Carregando suas fichas…','syncing');updateAccountControls(true);
+  let acquired;
+  try {
+    acquired=await acquireAccountLock(navigator.locks,`trespasser.account.${user.id}`);
+  } catch(error) {
+    if(generation!==cloudGeneration)return;
+    cloudBlockedReason=error.code==='ACCOUNT_LOCK_UNSUPPORTED'?error.message:'Não foi possível abrir esta conta com segurança. Recarregue a página ou use um navegador atualizado.';
+    accountProblem=cloudBlockedReason;onCloudStatus({state:'error',pending:0,localSaved:true,message:cloudBlockedReason});updateAccountControls(true);
+    if(!$('#utility-dialog').open)openAccountDialog();
+    return;
+  }
+  if(generation!==cloudGeneration){acquired?.release();return;}
+  if(!acquired){
+    cloudBlockedReason='Esta conta está aberta em outra aba. Feche-a e recarregue esta página.';
+    accountProblem=cloudBlockedReason;onCloudStatus({state:'error',pending:0,localSaved:true,message:cloudBlockedReason});updateAccountControls(true);
+    if(!$('#utility-dialog').open)openAccountDialog();
+    return;
+  }
+  cloudAccountLock=acquired;
+  cloudEngine=new CloudSync({adapter:cloudConnection.adapter.forUser(user.id),storage:localStorage,cacheKey:`${KEY}.cloud.${user.id}`,makeId:uid,
+    onChange:snapshot=>{if(generation===cloudGeneration)applyCloudSnapshot(snapshot);},
+    onStatus:status=>{if(generation===cloudGeneration)onCloudStatus(status);},
+    onConflict:conflict=>{if(generation===cloudGeneration)toast(conflict.message||'Edições simultâneas preservadas em uma ficha com “(conflito)”. Confira as duas versões.',true);}
+  });
+  try {
+    await cloudEngine.start({records:[],activeId:null});
+    if (generation!==cloudGeneration) return;
+    cloudReady=true;setCloudLoading(false);onCloudStatus(cloudStatus);updateAccountControls(true);
+    cloudPollTimer=setInterval(()=>{if(!document.hidden)syncCloud();},15000);
+    if (pendingLocalCharacters().length && !$('#utility-dialog').open) openAccountDialog();
+  } catch {
+    if(generation!==cloudGeneration)return;
+    cloudReady=true;setCloudLoading(false);onCloudStatus({state:'error',pending:0,message:'Não foi possível sincronizar. Suas edições ficam neste dispositivo; tente novamente.'});updateAccountControls(true);
+  }
+}
+async function initializeCloud() {
+  // A stalled SDK session lock must not leave the account dialog unusable.
+  const verificationTimer=setTimeout(()=>{
+    if(!authReady){authReady=true;accountProblem='A verificação da sessão está demorando. Você pode tentar entrar novamente.';updateAccountControls(true);}
+  },20000);
+  try {
+    cloudConnection=createCloudClient(cloudConfig);
+    // The auth callback stays synchronous; SDK calls happen after its lock is released.
+    cloudConnection.auth.onAuthStateChange((_event,session)=>{
+      const revision=++authEventRevision;
+      setTimeout(()=>{if(revision===authEventRevision){authReady=true;accountProblem='';void attachSession(session);}},0);
+    });
+    const revision=authEventRevision;
+    const {data,error}=await cloudConnection.auth.getSession();
+    if(error)throw error;
+    if(revision===authEventRevision){authReady=true;accountProblem='';await attachSession(data.session);}
+  } catch {
+    authReady=true;
+    if(!cloudUser){accountProblem='Não foi possível verificar sua sessão. Você pode tentar entrar novamente.';updateAccountControls(true);}
+  } finally { clearTimeout(verificationTimer); }
+}
+async function loginCloud() {
+  if (!cloudConnection || authBusy) return;
+  authBusy=true;accountProblem='';updateAccountControls(true);
+  try {
+    const redirectTo=new URL('./',location.href);redirectTo.search='';redirectTo.hash='';
+    const {error}=await cloudConnection.auth.signInWithOAuth({provider:'google',options:{redirectTo:redirectTo.href}});
+    if(error)throw error;
+  } catch { accountProblem='Não foi possível abrir o login com Google. Tente novamente.';authBusy=false;updateAccountControls(true); }
+}
+async function logoutCloud() {
+  if (!cloudConnection || authBusy || cloudEditError || hasUncachedEdits()) return;
+  authBusy=true;accountProblem='';updateAccountControls(true);
+  try {
+    const {error}=await cloudConnection.auth.signOut({scope:'local'});
+    if(error)throw error;
+    await attachSession(null);
+    toast('Você saiu da conta neste dispositivo. As fichas online continuam na sua conta.');
+  } catch { accountProblem='Não foi possível sair agora. Tente novamente.'; }
+  finally {authBusy=false;updateAccountControls(true);}
+}
+async function migrateLocalCharacters() {
+  if (!cloudReady || !cloudUser || authBusy || cloudEditError || hasUncachedEdits()) return;
+  const result=mergeLocalCharacters(cloudRecords(),guestBackup?.records||[],migratedLocalIds(),uid);
+  if (!result.migratedIds.length)return;
+  records=result.records;activeId=result.activeId;cloudPlaceholderId=null;
+  save();render();
+  result.migratedIds.forEach(id=>migrationSessionIds.add(id));
+  // setRecords caches synchronously. Only record the migration when that cache succeeded.
+  if (cloudStatus.state!=='error') {
+    try { localStorage.setItem(`${KEY}.migrated.${cloudUser.id}`,JSON.stringify([...new Set([...migratedLocalIds(),...result.migratedIds])])); }
+    catch { toast('As fichas foram copiadas, mas o navegador não conseguiu registrar a transferência.',true); }
+  }
+  updateAccountControls(true);await syncCloud();
+  toast(cloudStatus.state==='synced'?'Fichas salvas online. A cópia local deste navegador foi mantida.':'Fichas copiadas; a sincronização está pendente. Mantenha este navegador até aparecer “Salvo online”.',cloudStatus.state!=='synced');
 }
 let toastTimer;
 function toast(message, long=false) { $('#toast').textContent=message; $('#toast').hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>$('#toast').hidden=true,long?9000:3500); }
@@ -98,14 +320,20 @@ function equipmentPage() {
   const c=current(),d=derive(c);
   return `${panel('Armas','Weapons',`<div class="two-columns inner">${c.weapons.map((w,i)=>`<div class="equipment-block"><p class="eyebrow">${i===0?'MÃO PRINCIPAL · MAIN HAND':'MÃO SECUNDÁRIA · OFF HAND'}</p><div class="form-grid">${field('Arma',`weapons.${i}.name`,{placeholder:'Nome da arma',cls:'full'})}${field('Dados de dano',`weapons.${i}.damage`,{placeholder:'Ex.: 2d6'})}${field('Tipo & alcance',`weapons.${i}.range`,{placeholder:'Tipo e alcance'})}${field('Propriedades',`weapons.${i}.properties`,{cls:'full'})}</div></div>`).join('')}</div>`)}${panel('Armadura','Armor',`<div class="armor-total">${icon('shield')}<span>Armadura total <small>Total armor rating</small></span><strong>${d.armor}</strong><span class="tag ${d.encumbered?'warning':''}">${d.encumbered?'Carga pesada · AR ≥ 6':'Sem penalidade de armadura'}</span></div><p class="panel-note">L = leve, H = pesada. Peças pesadas: ${d.heavyArmor} / ${c.attributes.might} permitidas por Might. ${d.heavyArmor>c.attributes.might?'Confira a carga: há peças pesadas além do limite. ' : ''}Armas e armaduras equipadas não ocupam espaços do inventário.</p><div class="table-scroll"><table class="armor-table"><thead><tr><th>Posição / peça</th><th>Peso<br><small>Weight</small></th><th>AR</th><th>Dado<br><small>Die</small></th><th>Propriedades</th><th>Gasto</th></tr></thead><tbody>${c.armor.map((a,i)=>`<tr><td>${field(armorLabels[a.slot] || a.slot,`armor.${i}.name`,{placeholder:'—'})}</td><td><label class="field"><span>Peso</span><select aria-label="Peso · ${armorLabels[a.slot]}" data-field="armor.${i}.weight" ${a.slot==='shield'?'disabled':''}>${[['','—'],['L','L'],['H','H']].map(([v,t])=>`<option value="${v}" ${a.weight===v?'selected':''}>${t}</option>`).join('')}</select></label></td><td>${num('AR',`armor.${i}.ar`,{min:0,max:100})}</td><td>${field('Dado',`armor.${i}.die`,{placeholder:'d6'})}</td><td>${field('Propriedades',`armor.${i}.properties`,{placeholder:'Efeito da peça'})}</td><td><label class="check-only"><input type="checkbox" data-field="armor.${i}.spent" ${a.spent?'checked':''}><span class="sr-only">Dado de armadura gasto: ${armorLabels[a.slot]}</span></label></td></tr>`).join('')}</tbody></table></div>`)}${panel('Itens mágicos','Magic items',`<div class="magic-grid">${c.magicItems.map((m,i)=>`<div class="equipment-block"><p class="eyebrow">${['AMULETO · AMULET','ANEL · RING','TALISMÃ · TALISMAN'][i]}</p>${field('Item',`magicItems.${i}.name`,{placeholder:'Nome do item'})}${area('Efeito',`magicItems.${i}.effect`,'Propriedades e efeito mágico.',3)}</div>`).join('')}</div>`)}${panel('Inventário','Inventory',`<div class="inventory-head"><div><strong class="slots ${d.usedSlots>d.slots?'overloaded':''}">${d.usedSlots}<small>/ ${d.slots}</small></strong><span>espaços ocupados <small>5 + Might</small></span></div><div>${field('Moedas · cp / sp / gp','coins',{placeholder:'Ex.: 25 cp, 2 sp'})}<button class="button small" data-action="add-item">+ Adicionar item</button></div></div>${d.usedSlots>d.slots?'<p class="inline-warning">A capacidade foi excedida. Confira a carga com o Judge.</p>':''}${c.inventory.length?`<div class="inventory-list">${c.inventory.map((item,i)=>`<div class="inventory-item"><span class="item-number">${String(i+1).padStart(2,'0')}</span>${field('Item',`inventory.${i}.name`,{placeholder:'O que você carrega?'})}${num('Espaços',`inventory.${i}.slots`,{min:0,step:0.5})}${field('Notas',`inventory.${i}.notes`,{placeholder:'Quantidade, uso, detalhes…'})}<button class="icon-button danger" data-remove="inventory.${i}" aria-label="Excluir item ${i+1}">×</button></div>`).join('')}</div>`:'<div class="empty-state">'+icon('bag')+'<h4>Inventário vazio</h4><p>Adicione itens e os espaços que ocupam.</p></div>'}`)}`;
 }
-function notesPage() { return `${panel('Diário de viagem','Journal',area('Anotações da aventura','notes','Pessoas que encontrou. Promessas que fez. Lugares aos quais talvez volte.',18))}<div class="quiet-callout">${icon('book')}<div><h3>Cópia da ficha</h3><p>Exportar baixa um ZIP com o PDF preenchível e o JSON da ficha. O PDF mantém campos editáveis; o JSON permite reabrir o personagem neste site. Alterações nos dois arquivos são independentes. Use a impressão para levar uma cópia em papel.</p><button class="text-button" data-action="export">Exportar PDF + JSON ↓</button></div></div>`; }
+function notesPage() { return `${panel('Diário de viagem','Journal',area('Anotações da aventura','notes','Pessoas que encontrou. Promessas que fez. Lugares aos quais talvez volte.',18))}<div class="quiet-callout">${icon('book')}<div><h3>${cloudUser?'Sua ficha online':'Continue em outro dispositivo'}</h3><p>${cloudUser?'As alterações são sincronizadas com sua conta. Entre com o mesmo Google no celular e no computador para acessar esta ficha.':'Use Entrar para salvar suas fichas na conta e continuar no celular ou no computador. Sem entrar, elas ficam neste navegador.'}</p><button class="text-button" data-action="cloud-account">${cloudUser?'Conta & sincronização ↗':'Entrar para salvar online ↗'}</button><h3>Cópia da ficha</h3><p>Exportar baixa um ZIP com o PDF preenchível e o JSON da ficha. O PDF mantém campos editáveis; o JSON permite reabrir o personagem neste site. Alterações nos arquivos são independentes. Use a impressão para levar uma cópia em papel.</p><button class="text-button" data-action="export">Exportar PDF + JSON ↓</button></div></div>`; }
 const pages={character:characterPage,combat:combatPage,equipment:equipmentPage,notes:notesPage};
 function renderContent() { $('#sheet-content').innerHTML=pages[tab](); syncExportButtons(); }
 function render() {
-  const focused=document.activeElement?.dataset.field;
+  const previous=document.activeElement;
+  const focused=previous?.dataset.field;
+  const selection=focused && ['text','search','url','tel','password'].includes(previous.type)||previous?.tagName==='TEXTAREA'
+    ? {start:previous.selectionStart,end:previous.selectionEnd,direction:previous.selectionDirection,scroll:previous.scrollTop}:null;
   renderSidebar(); renderIdentity(); renderResources(); renderContent();
   const i=tabs.findIndex(t=>t[0]===tab); $('#chapter-number').textContent=`0${i+1}`; $('#section-title').textContent=tabs[i][1]; $('#section-description').textContent=tabs[i][3];
-  if (focused) document.querySelector(`[data-field="${CSS.escape(focused)}"]`)?.focus({preventScroll:true});
+  if (focused) {
+    const next=document.querySelector(`[data-field="${CSS.escape(focused)}"]`);next?.focus({preventScroll:true});
+    if (selection && next?.setSelectionRange) {next.setSelectionRange(selection.start,selection.end,selection.direction);next.scrollTop=selection.scroll;}
+  }
 }
 function retireExportUrls() {
   const retired = exportUrls;
@@ -115,16 +343,17 @@ function retireExportUrls() {
 }
 function invalidateDialog() { dialogVersion += 1; retireExportUrls(); }
 function showDialog(title,content) {
+  accountDialogActive=false;
   invalidateDialog();
   $('#dialog-title').textContent=title; $('#dialog-content').innerHTML=content;
   if (!$('#utility-dialog').open) $('#utility-dialog').showModal();
   syncExportButtons();
   return dialogVersion;
 }
-function closeDialog() { invalidateDialog(); $('#utility-dialog').close(); }
+function closeDialog() { accountDialogActive=false;invalidateDialog(); $('#utility-dialog').close(); }
 function syncExportButtons() {
   document.querySelectorAll('#export-button, [data-action="export"]').forEach(button=>{
-    button.disabled=exportBusy;
+    button.disabled=exportBusy || Boolean(cloudUser&&!cloudReady);
     if (exportBusy) button.setAttribute('aria-busy','true'); else button.removeAttribute('aria-busy');
   });
 }
@@ -218,6 +447,11 @@ document.addEventListener('click',e=>{
   if(el.dataset.roll){openDice(el.dataset.roll);performRoll(el.dataset.roll);return;}
   if(el.dataset.useDeed!==undefined){const deed=c.deeds[Number(el.dataset.useDeed)],cost=Number(deed.cost)+Number(deed.focus);if(c.resources.focus<cost){toast('Foco insuficiente para este feito.');return;}c.resources.focus-=cost;if(['heavy','mighty'].includes(deed.kind))deed.focus=Math.min(10000,deed.focus+1);save();render();toast(`Feito usado: ${cost} foco gasto.`);return;}
   const action=el.dataset.action;
+  if(action==='cloud-account'){openAccountDialog();return;}
+  if(action==='cloud-login'){void loginCloud();return;}
+  if(action==='cloud-logout'){void logoutCloud();return;}
+  if(action==='cloud-sync'){void syncCloud();return;}
+  if(action==='cloud-migrate'){void migrateLocalCharacters();return;}
   if(action==='add-item'){c.inventory.push({id:uid(),name:'',slots:1,notes:''});save();renderContent();document.querySelector(`[data-field="inventory.${c.inventory.length-1}.name"]`)?.focus();}
   if(action==='add-deed'){c.deeds.push({id:uid(),name:'',kind:'light',cost:0,focus:0,description:''});save();renderContent();document.querySelector(`[data-field="deeds.${c.deeds.length-1}.name"]`)?.focus();}
   if(action==='export')exportCharacter();
@@ -238,14 +472,15 @@ document.addEventListener('click',e=>{
     c.deeds.forEach(x=>x.focus=0);c.armor.forEach(x=>x.spent=false);save();render();closeDialog();toast('Descanso registrado. Resolva aflições e ferimentos com o Judge.');
   }
   if(action==='duplicate'){const copy=normalizeCharacter(structuredClone(c));copy.id=uid();copy.name=(c.name||'Personagem')+' (cópia)';records.push(copy);activeId=copy.id;save();render();closeDialog();toast('Cópia criada.');}
-  if(action==='delete')showDialog('Excluir personagem',`<p>Excluir <strong>${esc(c.name||'Novo personagem')}</strong> deste navegador? Essa ação não pode ser desfeita. Você pode exportar uma cópia antes.</p><div class="dialog-actions"><button class="button" data-action="export">Exportar ficha</button><button class="button destructive" data-action="confirm-delete">Excluir personagem</button></div>`);
-  if(action==='confirm-delete'){records=records.filter(x=>x.id!==activeId);if(!records.length)records=[createCharacter()];activeId=records[0].id;save();render();closeDialog();toast('Personagem excluído.');}
+  if(action==='delete')showDialog('Excluir personagem',`<p>Excluir <strong>${esc(c.name||'Novo personagem')}</strong> ${cloudUser?'da sua conta e dos dispositivos sincronizados':'deste navegador'}? Essa ação não pode ser desfeita. Você pode exportar uma cópia antes.</p><div class="dialog-actions"><button class="button" data-action="export">Exportar ficha</button><button class="button destructive" data-action="confirm-delete">Excluir personagem</button></div>`);
+  if(action==='confirm-delete'){records=records.filter(x=>x.id!==activeId);if(!records.length){records=[createCharacter()];if(cloudUser)cloudPlaceholderId=records[0].id;}activeId=records[0].id;save();render();closeDialog();toast('Personagem excluído.');}
 });
 function addCharacter(){const c=createCharacter();records.push(c);activeId=c.id;tab='character';save();render();document.querySelector('[data-field="name"]').focus();toast('Nova ficha criada. Escolha o nível e preencha seus atributos.');}
 $('#mobile-new').addEventListener('click',addCharacter);$('#mobile-dice').addEventListener('click',()=>openDice());
 $('#mobile-character-select').addEventListener('change',e=>{activeId=e.target.value;save();render();});
 $('#new-character').addEventListener('click',addCharacter);$('#add-character').addEventListener('click',addCharacter);
 $('#export-button').addEventListener('click',exportCharacter);
+$('#account-button').addEventListener('click',openAccountDialog);
 $('#import-button').addEventListener('click',()=>{$('#import-file').value='';$('#import-file').click();});
 $('#import-file').addEventListener('change',async e=>{
   const file=e.target.files[0];if(!file)return;
@@ -261,7 +496,7 @@ $('#dialog-close').addEventListener('click',closeDialog);
 $('#utility-dialog').addEventListener('cancel',invalidateDialog);
 $('#utility-dialog').addEventListener('close',()=>{if (!$('#utility-dialog').open) invalidateDialog();});
 $('#utility-dialog').addEventListener('click',e=>{if(e.target===$('#utility-dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)closeDialog();}});
-$('#about-button').addEventListener('click',()=>showDialog('Sobre este registro',`<p>Ferramenta não oficial baseada no Rulebook e Character Record de <strong>Trespasser v2.1.3</strong>. Traduções de interface são livres; os termos em inglês ajudam a consultar o livro.</p><h3>Cálculos</h3><p>Os atributos, nível, perícias e AR alimentam os valores da ficha. Vocação, talentos e efeitos específicos exigem ajustes manuais em Combate. Estados e aflições são registros; seus efeitos precisam ser resolvidos na mesa.</p><p>PV: (nível + 1) × (5 + Might), mais o ajuste de PV. Endurance: 10 + Spirit. AR ≥ 6 remove Agility da Guarda e limita o bônus de velocidade a +2. Commoners não usam Endurance, recuperação ou foco.</p><h3>Seus dados</h3><p>O salvamento é local, neste navegador e neste endereço. Não há conta nem sincronização entre dispositivos. Limpar os dados do navegador pode apagar as fichas. Exportar baixa um ZIP com o PDF preenchível e o JSON da ficha; também oferece os arquivos separados. O PDF mantém campos editáveis, e o JSON permite reabrir o personagem neste site. Alterações nos arquivos são independentes e não sincronizam com o navegador. Importar o JSON cria uma nova ficha.</p><p class="panel-note">Referências do livro: pp. 11–12, 19, 22–24, 31, 44–45, 55, 63, 71, 75, 86, 88–90. A impressão inclui todas as seções da ficha; use Exportar para gerar o PDF preenchível.</p>`));
+$('#about-button').addEventListener('click',()=>showDialog('Sobre este registro',`<p>Ferramenta não oficial baseada no Rulebook e Character Record de <strong>Trespasser v2.1.3</strong>. Traduções de interface são livres; os termos em inglês ajudam a consultar o livro.</p><h3>Cálculos</h3><p>Os atributos, nível, perícias e AR alimentam os valores da ficha. Vocação, talentos e efeitos específicos exigem ajustes manuais em Combate. Estados e aflições são registros; seus efeitos precisam ser resolvidos na mesa.</p><p>PV: (nível + 1) × (5 + Might), mais o ajuste de PV. Endurance: 10 + Spirit. AR ≥ 6 remove Agility da Guarda e limita o bônus de velocidade a +2. Commoners não usam Endurance, recuperação ou foco.</p><h3>Seus dados</h3><p>Entre com Google para salvar suas fichas privadas na conta e acessar os mesmos personagens no celular e no computador. O salvamento é automático; confira o indicador “Salvo online”. Sem conexão, as alterações ficam pendentes neste navegador e são enviadas quando a conexão volta. Edições simultâneas conflitantes são preservadas em uma cópia com “(conflito)”.</p><p>Sem entrar, o salvamento continua local. As fichas locais podem ser copiadas para a conta pela opção Conta. Ao sair, você volta às fichas locais; as fichas da conta continuam privadas. Limpar os dados do navegador apaga cópias locais e alterações ainda não sincronizadas.</p><p>Exportar baixa um ZIP com o PDF preenchível e o JSON da ficha; também oferece os arquivos separados. Alterações nesses arquivos são independentes da ficha online. Importar o JSON cria uma nova ficha.</p><button class="button" data-action="cloud-account">${cloudUser?'Conta & sincronização':'Entrar para salvar online'}</button><p class="panel-note">Referências do livro: pp. 11–12, 19, 22–24, 31, 44–45, 55, 63, 71, 75, 86, 88–90. A impressão inclui todas as seções da ficha; use Exportar para gerar o PDF preenchível.</p>`));
 function openDice(expression='1d20') {
   showDialog('Rolagem de dados',`<p class="panel-note">Rolagem livre. Para testes: d20 + atributo + Skill bonus quando a perícia é treinada. Compare com o TN anunciado na mesa.</p><form id="dice-form"><label class="field"><span>Expressão de dados</span><input id="dice-expression" value="${esc(expression)}" placeholder="Ex.: 1d20+3" maxlength="80" autocomplete="off" required></label><button type="submit" class="button primary">${icon('dice')} Rolar dados</button></form><div id="dice-result" aria-live="polite"></div><div class="roll-history" id="roll-history"></div>`);
   $('#dice-form').addEventListener('submit',e=>{e.preventDefault();performRoll($('#dice-expression').value);});
@@ -283,5 +518,14 @@ window.addEventListener('beforeprint',()=>{
 });
 window.addEventListener('afterprint',()=>{cleanupPrint?.();cleanupPrint=null;$('#print-document')?.remove();});
 $('#print-button').addEventListener('click',()=>window.print());
-window.addEventListener('storage',e=>{if(e.key===KEY){showDialog('O registro mudou em outra aba',`<p>Outra aba alterou os personagens. Recarregue para ler os dados mais recentes antes de continuar. Exporte esta ficha se quiser preservar a edição atual.</p><div class="dialog-actions"><button class="button" data-action="export">Exportar esta versão</button><button class="button primary" id="reload-records">Carregar versão recente</button></div>`);saveError=true;$('#save-status').textContent='Alteração em outra aba · recarregue';$('#reload-records').addEventListener('click',()=>location.reload());}});
+window.addEventListener('storage',e=>{if(e.key===KEY&&!cloudUser){showDialog('O registro mudou em outra aba',`<p>Outra aba alterou os personagens. Recarregue para ler os dados mais recentes antes de continuar. Exporte esta ficha se quiser preservar a edição atual.</p><div class="dialog-actions"><button class="button" data-action="export">Exportar esta versão</button><button class="button primary" id="reload-records">Carregar versão recente</button></div>`);saveError=true;$('#save-status').textContent='Alteração em outra aba · recarregue';$('#reload-records').addEventListener('click',()=>location.reload());}});
+window.addEventListener('online',()=>{void syncCloud();});
+window.addEventListener('focus',()=>{void syncCloud();});
+window.addEventListener('beforeunload',event=>{
+  if (cloudUser && (cloudEditError || hasUncachedEdits())) { event.preventDefault();event.returnValue=''; }
+});
+window.addEventListener('pagehide',()=>{stopCloud();});
+window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)void syncCloud();});
 render(); if(!saveError)save();
+void initializeCloud();

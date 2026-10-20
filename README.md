@@ -4,9 +4,11 @@ Ficha editável não oficial para Trespasser v2.1.3, em português com os termos
 
 ## Acessar online
 
-[Abrir a ficha](https://th3unforg1ven.github.io/trespasser-ficha/)
+[Abrir a ficha](https://th3unforg1ven.github.io/trespassercs/)
 
-O site pode ser aberto em qualquer dispositivo. Os personagens são salvos neste navegador; para levar uma ficha do localhost ou de outro dispositivo, use **Exportar** e depois **Importar** o JSON no endereço online.
+Use **Entrar → Entrar com Google** para salvar suas fichas privadas na conta. Entre com o mesmo Google no celular e no computador para continuar a edição. Sem entrar, os personagens são salvos apenas neste navegador.
+
+Depois de entrar, use **Salvar minhas fichas locais na conta** para enviar personagens que já estavam neste endereço. A cópia local é mantida. Fichas de outro endereço, como localhost, podem ser importadas por JSON uma vez.
 
 **Exportar** prepara um ZIP com PDF preenchível e JSON do mesmo personagem, com opções para baixar cada arquivo separadamente. Textos longos e feitos ou itens excedentes recebem páginas adicionais, também preenchíveis. Os cálculos exportados podem ser editados manualmente no PDF.
 
@@ -58,9 +60,17 @@ Fontes principais: pp.11–12 (atributos e perícias), 22–24 (valores e descan
 
 ## Salvamento
 
-As fichas são salvas no `localStorage` deste navegador e deste endereço. Não há conta, nuvem ou sincronização entre dispositivos. Usar outro navegador, perfil, endereço ou porta pode mostrar um registro diferente; limpar os dados do navegador pode apagar as fichas.
+Com uma conta conectada, o site salva automaticamente no Supabase e verifica atualizações a cada 15 segundos e ao voltar à aba. O indicador **Salvo online** confirma a sincronização. Alterações offline ficam pendentes no cache da conta neste dispositivo e são reenviadas quando a conexão volta. Evite editar a mesma ficha simultaneamente: campos distintos podem ser mesclados; alterações incompatíveis são preservadas em uma ficha com **(conflito)** no nome.
+
+O cache é separado por conta. **Sair deste dispositivo** volta às fichas de visitante, mantendo o cache privado para o próximo login. O navegador guarda uma sessão de acesso; em computador compartilhado, saia ao terminar. Limpar os dados do navegador apaga fichas de visitante e alterações que ainda não chegaram à nuvem.
+
+Use uma aba da conta por navegador. Uma trava entre abas impede que duas cópias sobrescrevam alterações offline no mesmo cache. Se a conta já estiver aberta, feche a outra aba e recarregue; navegadores sem a API Web Locks precisam ser atualizados para usar o salvamento online.
+
+Os dados remotos ficam na tabela exclusiva `trespasser_characters` do projeto Biocoded, com políticas que permitem a cada usuário acessar apenas suas fichas. O projeto e o login são compartilhados com Biocoded; os objetos existentes são preservados. O esquema e os testes de acesso estão em `backend/`.
 
 Use Exportar para guardar os dois arquivos do mesmo personagem. O PDF permite preencher e salvar seus campos em um leitor compatível; use o JSON para restaurar a ficha no site. A importação cria um novo personagem. As cópias do navegador, do PDF e do JSON são independentes.
+
+A biblioteca Supabase está incluída em `dist/vendor/`, com versão exata no `package-lock.json`. Para reproduzir essa cópia, execute `npm ci` e `npm run vendor:supabase`. A configuração pública está em `dist/cloud-config.js`; nenhuma chave secreta ou senha é necessária no site.
 
 ## Limite da verificação de impressão
 
