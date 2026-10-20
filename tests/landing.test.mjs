@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { initialView,isAuthReturn,setupLanding } from '../dist/landing.js';
+import { setLanguagePreference } from '../dist/i18n.js';
 
 const url=path=>new URL(path,'https://example.test/trespasser-ficha/');
 const available={signedIn:true,ready:true,recordsReady:true,loading:false,blocked:false};
 const flush=async()=>{for(let count=0;count<12;count++)await Promise.resolve();};
 
-function fixture({location=url('./'),savedView=null,storedArt=null,deferredTransition=false,navigationError=false}={}) {
+function fixture({location=url('./'),savedView=null,storedArt=null,deferredTransition=false,navigationError=false,device='pt-BR'}={}) {
   const session=new Map(savedView?[['trespasser.view.v1',savedView]]:[]);
   const local=new Map(storedArt?[['trespasser.landing.art.v1',storedArt]]:[]);
   const storage=map=>({getItem:key=>map.get(key)??null,setItem:(key,value)=>map.set(key,value),removeItem:key=>map.delete(key)});
@@ -14,11 +15,11 @@ function fixture({location=url('./'),savedView=null,storedArt=null,deferredTrans
   const node=(dataset={})=>({dataset,listeners:new Map(),attributes:new Map(),hidden:false,focused:false,clicks:0,disabled:false,textContent:'',
     addEventListener(type,callback){this.listeners.set(type,callback);},setAttribute(key,value){this.attributes.set(key,value);},
     focus(){this.focused=true;},click(){if(this.disabled||this.hidden)return;this.clicks++;this.listeners.get('click')?.();if(this.dataset.action)delegatedActions.push(this.dataset.action);}});
-  const selectors=['#landing','#record-workspace','#skip-link','#landing-title','#main','#landing-heading','#landing-start-actions','#landing-start','#landing-register-actions','#landing-open','#landing-havens','#landing-settings','#landing-auth-status','#account-button','#home-button','.landing-description'];
+  const selectors=['#landing','#record-workspace','#skip-link','#landing-title','#main','#landing-heading','#landing-start-actions','#landing-start','#landing-register-actions','#landing-open','#landing-havens','#haven-register-button','#landing-settings','#landing-auth-status','#account-button','#home-button','.landing-description'];
   const nodes=new Map(selectors.map(selector=>[selector,node()]));
   nodes.get('#landing-start').dataset.action='onboarding';nodes.get('#landing-settings').dataset.action='settings';
   const document={body:{dataset:{}},querySelector:selector=>nodes.get(selector)};
-  const window={scrollTo(){},addEventListener:(type,callback)=>windowEvents.set(type,callback)};
+  const window={navigator:{language:device},scrollTo(){},addEventListener:(type,callback)=>windowEvents.set(type,callback),CustomEvent:class{constructor(type,options){this.type=type;this.detail=options?.detail;}},dispatchEvent:event=>windowEvents.get(event.type)?.(event)};
   let completeTransition,transitionActive=false;
   const transition={
     async run(task,options){
@@ -64,6 +65,23 @@ test('guests see only Começar and its explicit delegated onboarding action',()=
   f.nodes.get('#landing-start').click();
   assert.deepEqual(f.delegatedActions,['onboarding']);
   assert.equal(f.nodes.get('#account-button').clicks,0);assert.equal(f.document.body.dataset.view,'home');
+});
+
+test('language follows the device and changes home labels without changing account or navigation state',()=>{
+  const f=fixture({device:'fr-FR'});
+  assert.equal(f.nodes.get('#landing-heading').textContent,'Your adventure starts here');
+  assert.match(f.nodes.get('.landing-description').textContent,/characters and havens/);
+  f.emit(available);assert.equal(f.nodes.get('#landing-heading').textContent,'Your records');
+  setLanguagePreference('pt');assert.equal(f.nodes.get('#landing-heading').textContent,'Seus registros');
+  assert.equal(f.nodes.get('#landing-register-actions').hidden,false);assert.equal(f.nodes.get('#landing-start-actions').hidden,true);
+  assert.equal(f.document.body.dataset.view,'home');assert.deepEqual(f.navigations,[]);assert.deepEqual(f.delegatedActions,[]);
+});
+
+test('character toolbar can open Havens through the same gated loading transition',()=>{
+  const f=fixture();const button=f.nodes.get('#haven-register-button');assert.equal(button.disabled,true);
+  f.emit(available);assert.equal(button.disabled,false);
+  let prevented=false;button.listeners.get('click')({preventDefault(){prevented=true;}});
+  assert.equal(prevented,true);assert.deepEqual(f.navigations,['./havens.html']);assert.equal(f.transitionActive,true);
 });
 
 test('authenticated home exposes two registers and settings without opening any dialog',()=>{

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createCharacter, derive, normalizeCharacter, rollDice } from '../dist/model.js';
+import { createCharacter, derive, normalizeCharacter, rollDice, PLIGHTS, plightSummary } from '../dist/model.js';
+import { portraitPng } from './portrait-fixture.mjs';
 
 test('advancement follows every level of the official table', () => {
   const c = createCharacter();
@@ -131,4 +132,25 @@ test('dice parser respects signed modifiers and die bounds', () => {
   for (const expression of ['101d6', '0d6', '1d0', '1d1001', '1d6;alert(1)', '1d6++2', '', 'Infinity', '1d6 + 100001']) {
     assert.throws(() => rollDice(expression));
   }
+});
+
+test('portraits and Common Plights survive JSON roundtrips without changing legacy notes or calculations', () => {
+  const c = createCharacter('Retrato');
+  const before = derive(c);
+  c.portrait = {dataUrl:portraitPng(),zoom:1.8,x:12,y:75};
+  c.plightSelections = ['afraid','enfeebled','afraid'];
+  c.plights = 'Maldição antiga preservada.';
+  const saved = normalizeCharacter(JSON.parse(JSON.stringify(c)));
+  assert.deepEqual(saved.portrait,c.portrait);
+  assert.deepEqual(saved.plightSelections,['afraid','enfeebled']);
+  assert.equal(saved.plights,c.plights);
+  assert.match(plightSummary(saved),/Amedrontado \/ Afraid; Debilitado \/ Enfeebled\nMaldição antiga preservada\./);
+  assert.deepEqual(derive(saved),before,'checked conditions are manual and never silently recalculate');
+  assert.equal(PLIGHTS.length,10);
+  assert.ok(PLIGHTS.every(p=>p.descriptionPt && p.descriptionEn));
+  assert.throws(()=>normalizeCharacter({...c,plightSelections:['burning']}),/Aflição inválida/);
+  const old = normalizeCharacter({name:'Anterior',plights:'Texto existente'});
+  assert.deepEqual(old.portrait,{dataUrl:'',zoom:1,x:50,y:50});
+  assert.deepEqual(old.plightSelections,[]);
+  assert.equal(old.plights,'Texto existente');
 });

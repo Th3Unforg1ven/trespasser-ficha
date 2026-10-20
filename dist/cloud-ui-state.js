@@ -1,4 +1,4 @@
-import { createCharacter, normalizeCharacter } from './model.js';
+import { createCharacter, normalizeCharacter } from './model.js?v=records-2';
 
 const content = character => {
   const { id, ...data } = normalizeCharacter(character);

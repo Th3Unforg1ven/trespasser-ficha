@@ -1,7 +1,8 @@
-import { mountButtonIcons } from './icons.js?v=ink-1';
+import { mountButtonIcons } from './icons.js?v=records-2';
 import { consumeHavenReturn } from './auth-return.js';
-import { createPageTransition } from './ui-shell.js?v=onboarding-1';
+import { createPageTransition } from './ui-shell.js?v=records-2';
 import { setupLandingArt } from './landing-art.js?v=panorama-1';
+import { setupLanguage, t } from './i18n.js';
 
 const VIEW_KEY='trespasser.view.v1';
 
@@ -28,6 +29,7 @@ export function setupLanding({document,window,sessionStorage,location},{
   const $=selector=>document.querySelector(selector);
   const landing=$('#landing'),workspace=$('#record-workspace');
   if(!landing||!workspace)return;
+  setupLanguage({document,window});
   const artwork=setupLandingArt({document,window});
   const read=(storage,key)=>{try{return storage.getItem(key);}catch{return null;}};
   const write=(storage,key,value)=>{try{storage.setItem(key,value);}catch{/* Navigation also works without storage. */}};
@@ -54,18 +56,19 @@ export function setupLanding({document,window,sessionStorage,location},{
     const open=$('#landing-open');
     if(open){open.disabled=!recordsAvailable(account)||moving;open.setAttribute('aria-busy',String(signedIn&&!account.recordsReady&&!account.blocked));}
     const havens=$('#landing-havens');if(havens)havens.disabled=!signedIn||!account.ready||moving;
+    const havenRegister=$('#haven-register-button');if(havenRegister)havenRegister.disabled=!signedIn||!account.ready||moving;
     const settings=$('#landing-settings');if(settings){settings.hidden=!signedIn;settings.disabled=!account.ready||moving;}
-    if($('#landing-heading'))$('#landing-heading').textContent=signedIn?'Seus registros':'Sua aventura começa aqui';
+    if($('#landing-heading'))$('#landing-heading').textContent=t(signedIn?'Seus registros':'Sua aventura começa aqui');
     const description=$('.landing-description');
-    if(description)description.textContent=!signedIn
+    if(description)description.textContent=t(!signedIn
       ?'Crie e organize seus personagens e refúgios de Trespasser. Salve na sua conta, continue no celular ou no computador e exporte PDF editável e JSON.'
       :account.blocked
         ?(typeof account.blocked==='string'?account.blocked:'Não foi possível preparar seus personagens. Recarregue para tentar novamente.')
         :!account.recordsReady||account.loading
           ?'Preparando seus registros salvos…'
-          :'Escolha o registro de personagens ou de refúgios para continuar sua aventura.';
+          :'Escolha o registro de personagens ou de refúgios para continuar sua aventura.');
     const authStatus=$('#landing-auth-status');
-    if(authStatus){authStatus.textContent=!account.ready?'Verificando seu acesso…':signedIn&&!account.recordsReady&&!account.blocked?'Carregando personagens…':'';authStatus.hidden=!authStatus.textContent;}
+    if(authStatus){authStatus.textContent=t(!account.ready?'Verificando seu acesso…':signedIn&&!account.recordsReady&&!account.blocked?'Carregando personagens…':'');authStatus.hidden=!authStatus.textContent;}
   }
   function cancelNavigation(){navigationVersion++;moving=false;leavingPage=false;transition.finish();}
   async function openCharacters() {
@@ -87,6 +90,7 @@ export function setupLanding({document,window,sessionStorage,location},{
 
   $('#landing-open')?.addEventListener('click',()=>{void openCharacters();});
   $('#landing-havens')?.addEventListener('click',openHavens);
+  $('#haven-register-button')?.addEventListener('click',event=>{event.preventDefault();openHavens();});
   $('#home-button')?.addEventListener('click',()=>{workspaceIntent=false;cancelNavigation();setView('home');updateControls();});
   // Começar keeps its delegated onboarding action. Auth events never click it.
   window.addEventListener('trespasser:account',event=>{
@@ -105,6 +109,7 @@ export function setupLanding({document,window,sessionStorage,location},{
     if(workspaceIntent&&recordsAvailable(account))void openCharacters();
   });
   window.addEventListener('pageshow',event=>{if(event.persisted){cancelNavigation();updateControls();}});
+  window.addEventListener('trespasser:language',updateControls);
   setView('home',false);updateControls();
   return {setView,openCharacters,openHavens,artwork};
 }

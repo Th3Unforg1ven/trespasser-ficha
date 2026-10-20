@@ -1,5 +1,28 @@
 // Trespasser v2.1.3: rules pp. 11, 22–24, 31, 44–45, 71, 75, 86, 88–90.
 // Calling features and house rules are entered as explicit manual bonuses.
+import { normalizePortrait } from './portrait.js';
+
+// Common Plights, Trespasser v2.1.3, p. 58. These are manual selections;
+// marking one does not silently change the character's calculated values.
+export const PLIGHTS = Object.freeze([
+  { key: 'afraid', pt: 'Amedrontado', en: 'Afraid', descriptionPt: 'Não pode escolher faíscas quick ou striking em testes.', descriptionEn: 'Cannot choose quick or striking sparks on checks.' },
+  { key: 'angry', pt: 'Enfurecido', en: 'Angry', descriptionPt: 'Não pode escolher faíscas canny, quiet ou safe em testes.', descriptionEn: 'Cannot choose canny, quiet, or safe sparks on checks.' },
+  { key: 'befuddled', pt: 'Confuso', en: 'Befuddled', descriptionPt: 'Não soma bônus em testes de Intellect ou Spirit.', descriptionEn: 'No bonuses to Intellect or Spirit checks.' },
+  { key: 'clumsy', pt: 'Desajeitado', en: 'Clumsy', descriptionPt: 'Costly é uma sombra extra nos testes individuais durante exploração de masmorras.', descriptionEn: 'Costly is an extra shadow on non-group dungeon checks.' },
+  { key: 'conspicuous', pt: 'Chamativo', en: 'Conspicuous', descriptionPt: 'Loud é uma sombra extra nos testes individuais durante exploração de masmorras.', descriptionEn: 'Loud is an extra shadow on non-group dungeon checks.' },
+  { key: 'discouraged', pt: 'Desencorajado', en: 'Discouraged', descriptionPt: 'Não pode tentar o destino em testes de perícia.', descriptionEn: 'Cannot tempt fate on skill checks.' },
+  { key: 'distracted', pt: 'Distraído', en: 'Distracted', descriptionPt: 'Começa o combate com 0 focus.', descriptionEn: 'Start combat with 0 focus.' },
+  { key: 'enfeebled', pt: 'Debilitado', en: 'Enfeebled', descriptionPt: 'Capacidade do inventário reduzida à metade.', descriptionEn: 'Inventory size is halved.' },
+  { key: 'sickly', pt: 'Enfermiço', en: 'Sickly', descriptionPt: 'Não soma bônus em testes de Might ou Agility.', descriptionEn: 'No bonuses to Might or Agility checks.' },
+  { key: 'sluggish', pt: 'Letárgico', en: 'Sluggish', descriptionPt: 'Falha automaticamente na iniciativa; ainda testa iniciativa para recuar normalmente.', descriptionEn: 'Automatically fail initiative checks; retreat initiative still works normally.' },
+].map(plight => Object.freeze(plight)));
+const PLIGHT_KEYS = new Set(PLIGHTS.map(({ key }) => key));
+
+export function plightSummary(character) {
+  const selected = new Set(character.plightSelections || []);
+  return [PLIGHTS.filter(({ key }) => selected.has(key)).map(({ pt, en }) => `${pt} / ${en}`).join('; '), character.plights || '']
+    .filter(Boolean).join('\n');
+}
 
 export const ATTRS = Object.freeze([
   { key: 'might', pt: 'Força', en: 'Might' },
@@ -45,7 +68,7 @@ export function createCharacter(name = '') {
     bonuses: Object.fromEntries(BONUS_KEYS.map(key => [key, 0])),
     alignments: Array.from({ length: 2 }, () => ({ name: '', affirm: 0, deny: 0 })),
     injuries: Array.from({ length: 3 }, () => ({ name: '', clock: 0 })),
-    plights: '', features: '', notes: '', coins: '', inventory: [],
+    plights: '', plightSelections: [], portrait: normalizePortrait(), features: '', notes: '', coins: '', inventory: [],
     weapons: Array.from({ length: 2 }, () => ({ name: '', damage: '', range: '', properties: '' })),
     armor: ARMOR_SLOTS.map(slot => ({ slot, name: '', weight: '', ar: 0, die: '', properties: '', spent: false })),
     magicItems: MAGIC_SLOTS.map(slot => ({ slot, name: '', effect: '' })),
@@ -126,6 +149,11 @@ export function normalizeCharacter(input) {
     c[key] = string(data[key], c[key], key);
   }
   if (!c.id) c.id = uid();
+  c.portrait = normalizePortrait(data.portrait);
+  c.plightSelections = [...new Set(array(data.plightSelections, [], 'Aflições', PLIGHTS.length).map(key => {
+    if (!PLIGHT_KEYS.has(key)) throw new Error('Aflição inválida.');
+    return key;
+  }))];
   c.level = number(data.level, c.level, 'Nível', 0, 9, true);
   c.xp = number(data.xp, 0, 'XP', 0, 1000000000, true);
   const attrs = data.attributes === undefined ? {} : object(data.attributes, 'Atributos');

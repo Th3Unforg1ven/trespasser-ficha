@@ -1,4 +1,7 @@
-import {setButtonLabel,icon} from './icons.js';
+import {setButtonLabel,icon} from './icons.js?v=records-2';
+import {t,registerMessages} from './i18n.js';
+
+registerMessages({'Abrindo…':'Opening…','Abrindo seu registro…':'Opening your record…'});
 
 const themeControllers=new WeakMap(),transitions=new WeakMap();
 
@@ -8,7 +11,7 @@ export function setupThemeToggle({document:doc=globalThis.document,window:win=gl
   if(themeControllers.has(doc))return themeControllers.get(doc);
   const selector='[data-action="toggle-theme"]';
   function refresh(){
-    const dark=theme.getTheme()==='dark',label=`Ativar modo ${dark?'claro':'escuro'}`;
+    const dark=theme.getTheme()==='dark',label=t(dark?'Ativar modo claro':'Ativar modo escuro');
     doc.querySelectorAll(selector).forEach(button=>{
       button.setAttribute('aria-label',label);button.setAttribute('title',label);
       button.setAttribute('aria-pressed',String(dark));
@@ -22,9 +25,9 @@ export function setupThemeToggle({document:doc=globalThis.document,window:win=gl
     event.preventDefault();
     theme.setPreference(theme.getTheme()==='dark'?'light':'dark');refresh();
   }
-  doc.addEventListener('click',click);win?.addEventListener('trespasser:theme',refresh);
+  doc.addEventListener('click',click);win?.addEventListener('trespasser:theme',refresh);win?.addEventListener('trespasser:language',refresh);
   refresh();
-  const api=Object.freeze({refresh,dispose(){doc.removeEventListener('click',click);win?.removeEventListener('trespasser:theme',refresh);themeControllers.delete(doc);}});
+  const api=Object.freeze({refresh,dispose(){doc.removeEventListener('click',click);win?.removeEventListener('trespasser:theme',refresh);win?.removeEventListener('trespasser:language',refresh);themeControllers.delete(doc);}});
   themeControllers.set(doc,api);return api;
 }
 
@@ -61,7 +64,7 @@ export function createPageTransition({document:doc=globalThis.document,window:wi
   const {overlay,label}=makeOverlay(doc),schedule=(win?.setTimeout??globalThis.setTimeout).bind(win??globalThis),cancel=(win?.clearTimeout??globalThis.clearTimeout).bind(win??globalThis);
   const now=()=>win?.performance?.now?.()??Date.now();
   const timeout=Number.isFinite(timeoutMs)?Math.min(15000,Math.max(1000,timeoutMs)):8000;
-  let active=null,sequence=0,locks=[],previousFocus=null,previousBusy=null,sawHidden=false,disposed=false;
+  let active=null,sequence=0,locks=[],previousFocus=null,previousBusy=null,sawHidden=false,disposed=false,activeText='';
   const usable=node=>node&&node!==doc.body&&node!==doc.documentElement&&node.isConnected&&!node.disabled&&!node.closest?.('[hidden],[inert]');
   function restoreAttribute(node,name,value){if(value===null)node.removeAttribute(name);else node.setAttribute(name,value);}
   function release(){
@@ -91,7 +94,7 @@ export function createPageTransition({document:doc=globalThis.document,window:wi
       locks.forEach(({node})=>node.setAttribute('inert',''));
       doc.body.setAttribute('aria-busy','true');
     }
-    label.textContent=String(text);overlay.hidden=false;overlay.setAttribute('aria-busy','true');
+    activeText=String(text);label.textContent=t(activeText);overlay.hidden=false;overlay.setAttribute('aria-busy','true');
     const id=++sequence;active={id,timer:schedule(()=>finish(id),timeout)};
     return ()=>finish(id);
   }
@@ -110,8 +113,10 @@ export function createPageTransition({document:doc=globalThis.document,window:wi
   function pageshow(event){if(event.persisted)finish();}
   function visibility(){if(doc.visibilityState==='hidden')sawHidden=true;else if(sawHidden){sawHidden=false;finish();}}
   const pagehide=()=>finish(),beforeprint=()=>finish();
+  const languagechange=()=>{if(active)label.textContent=t(activeText);};
   doc.addEventListener('keydown',keydown);doc.addEventListener('visibilitychange',visibility);
   win?.addEventListener('pageshow',pageshow);win?.addEventListener('pagehide',pagehide);win?.addEventListener('beforeprint',beforeprint);
-  const api=Object.freeze({start,finish:()=>finish(),run,dispose(){if(disposed)return;finish();disposed=true;doc.removeEventListener('keydown',keydown);doc.removeEventListener('visibilitychange',visibility);win?.removeEventListener('pageshow',pageshow);win?.removeEventListener('pagehide',pagehide);win?.removeEventListener('beforeprint',beforeprint);transitions.delete(doc);}});
+  win?.addEventListener('trespasser:language',languagechange);
+  const api=Object.freeze({start,finish:()=>finish(),run,dispose(){if(disposed)return;finish();disposed=true;doc.removeEventListener('keydown',keydown);doc.removeEventListener('visibilitychange',visibility);win?.removeEventListener('pageshow',pageshow);win?.removeEventListener('pagehide',pagehide);win?.removeEventListener('beforeprint',beforeprint);win?.removeEventListener('trespasser:language',languagechange);transitions.delete(doc);}});
   transitions.set(doc,api);return api;
 }

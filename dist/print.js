@@ -38,6 +38,10 @@ export function preparePrint(rootElement = document.querySelector('#main')) {
     element.open = true;
   }
 
+  // Keep the framed image and its cover/zoom transform intact. Editing sliders
+  // and file controls have no meaning in the printed character sheet.
+  for (const controls of rootElement.querySelectorAll('[data-portrait-controls], .portrait-controls')) setStyles(controls, { display: 'none' });
+
   for (const control of rootElement.querySelectorAll('input, textarea, select')) {
     if (control.tagName === 'INPUT' && ['hidden', 'button', 'submit', 'reset', 'image', 'file'].includes(control.type)) continue;
     const choice = control.tagName === 'INPUT' && ['checkbox', 'radio'].includes(control.type);

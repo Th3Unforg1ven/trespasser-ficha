@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { PDFDocument, PDFCheckBox, PDFTextField } from '../dist/vendor/pdf-lib.js';
 import { createCharacter, derive, normalizeCharacter } from '../dist/model.js';
 import { buildExportData, fileStem } from '../dist/export-data.js';
+import { portraitPng } from './portrait-fixture.mjs';
 
 test('export mapping covers every canonical template field with correct value types', async () => {
   const template = await PDFDocument.load(await readFile(new URL('../dist/assets/trespasser-template.pdf', import.meta.url)));
@@ -121,6 +122,16 @@ test('all user values and overflow records survive intact in a separate normaliz
 test('malformed records fail export validation rather than silently losing data', () => {
   assert.throws(() => buildExportData({ level: 10 }));
   assert.throws(() => buildExportData({ inventory: [{ slots: -1 }] }));
+});
+
+test('shared export snapshot includes the portrait framing and both selected/legacy plights', () => {
+  const c=createCharacter('Imagem');
+  c.portrait={dataUrl:portraitPng(),zoom:2,x:0,y:100};
+  c.plightSelections=['sickly']; c.plights='Condição própria';
+  const data=buildExportData(c);
+  assert.deepEqual(JSON.parse(JSON.stringify(data.character)).portrait,c.portrait);
+  assert.deepEqual(data.character.plightSelections,['sickly']);
+  assert.equal(data.values.plights,'Enfermiço / Sickly\nCondição própria');
 });
 
 test('download filenames retain accents while excluding Windows reserved names and unsafe paths', () => {

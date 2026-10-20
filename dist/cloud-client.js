@@ -1,5 +1,5 @@
 import './vendor/supabase.js';
-import { isSyncCharacterId } from './sync-state.js';
+import { isSyncCharacterId } from './sync-state.js?v=records-2';
 
 const PAGE_SIZE = 500;
 const MAX_CHARACTERS = 10000;

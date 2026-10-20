@@ -1,4 +1,4 @@
-import { ATTRS, SKILLS, derive, normalizeCharacter } from './model.js';
+import { ATTRS, SKILLS, derive, normalizeCharacter, plightSummary } from './model.js?v=records-2';
 
 const BONUS_KEYS = ['hp', 'endurance', 'guard', 'accuracy', 'initiative', 'resist', 'prevail', 'tenacity', 'speed', 'focus'];
 export const STANDARD_STATES = Object.freeze([
@@ -34,7 +34,7 @@ export function buildExportData(input) {
     skill_die: d.skillDie,
     explore: signed(d.explore),
     encounter: signed(d.encounter),
-    plights: c.plights,
+    plights: plightSummary(c),
     features: c.features,
     level: String(c.level),
     xp_current: String(c.xp),

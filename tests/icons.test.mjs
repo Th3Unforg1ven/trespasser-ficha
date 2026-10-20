@@ -60,3 +60,15 @@ test('mounting twice adds one symbol while icon-only controls keep their aria-la
   assert.equal(iconOnly.button.textContent, '');
   assert.equal(iconOnly.button.children.length, 2);
 });
+
+test('icon enhancement preserves explicit language sources, while replacing a dynamic status clears stale sources',()=>{
+  const {button,root}=control({text:'Exportar',name:'export'});
+  setButtonLabel(button,'Exportar');
+  const label=button.querySelector('.button-label');label.setAttribute('data-i18n','Exportar');label.textContent='Export';
+  mountButtonIcons(root);mountButtonIcons(root);
+  assert.equal(button.textContent,'Export');
+  assert.equal(button.querySelector('.button-label').getAttribute('data-i18n'),'Exportar');
+  setButtonLabel(button,'Preparing…');
+  assert.equal(button.querySelector('.button-label').getAttribute('data-i18n'),undefined);
+  assert.equal(button.textContent,'Preparing…');
+});

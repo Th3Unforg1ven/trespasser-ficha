@@ -1,4 +1,4 @@
-import { normalizeSyncCharacter, normalizeSyncRecord, recordFingerprint, mergeRecord, isSyncCharacterId } from './sync-state.js?v=havens-1';
+import { normalizeSyncCharacter, normalizeSyncRecord, recordFingerprint, mergeRecord, isSyncCharacterId, CHARACTER_PORTRAIT_RECORD } from './sync-state.js?v=records-2';
 
 const CACHE_VERSION = 1;
 const MAX_RECORDS = 10_000;
@@ -40,6 +40,7 @@ export class CloudSync {
     if (typeof cacheKey !== 'string' || !cacheKey) throw new Error('Cache da conta não informado.');
     if (typeof normalizeRecord !== 'function') throw new Error('Normalizador de ficha inválido.');
     this.normalizeRecord = input => normalizeSyncRecord(input, normalizeRecord);
+    this.normalizeRecord[CHARACTER_PORTRAIT_RECORD] = normalizeRecord[CHARACTER_PORTRAIT_RECORD] === true;
     this.fingerprint = input => recordFingerprint(input, this.normalizeRecord);
     this.same = (left, right) => this.fingerprint(left) === this.fingerprint(right);
     this.adapter = adapter;

@@ -1,12 +1,14 @@
 import { createHaven, normalizeHaven, deriveHaven, HAVEN_ATTRS, HAVEN_SKILLS, HAVEN_LEVELS, HIRELING_TYPES } from './haven-model.js';
-import { createCloudClient } from './cloud-client.js';
+import { createCloudClient } from './cloud-client.js?v=records-2';
 import { cloudConfig } from './cloud-config.js';
-import { CloudSync } from './cloud-sync.js?v=havens-1';
+import { CloudSync } from './cloud-sync.js?v=records-2';
 import { acquireAccountLock } from './account-lock.js';
 import { setupTheme } from './preferences.js?v=settings-1';
-import { icon, mountButtonIcons } from './icons.js?v=ink-1';
-import { preparePrint } from './print.js';
-import { setupThemeToggle, createPageTransition } from './ui-shell.js?v=onboarding-1';
+import { icon, mountButtonIcons } from './icons.js?v=records-2';
+import { preparePrint } from './print.js?v=records-2';
+import { setupThemeToggle, createPageTransition } from './ui-shell.js?v=records-2';
+import { setupLanguage, t, getLanguage, languageSettingsMarkup, translateStatic } from './i18n.js';
+import './i18n-havens.js';
 
 export const HAVEN_KEY = 'trespasser.havens.v1';
 const clone = value => structuredClone(value);
@@ -14,6 +16,18 @@ const content = value => { const { id, ...data } = normalizeHaven(value); return
 const pristine = () => content(createHaven());
 const meaningful = value => content(value) !== pristine();
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+const HAVEN_ERROR_FIELDS=Object.freeze({
+  name:'Nome',leadership:'Liderança',location:'Localização',arrivals:'Chegadas',storedItems:'Itens armazenados',notes:'Anotações',
+  level:'Nível do refúgio',partyLevel:'Nível do grupo',populationRank:'Grau de população',populationMode:'Condição da população',wealth:'Riqueza',
+  growth:'Crescimento',decline:'Declínio',expenses:'Despesas',builds:'Construções em andamento',projects:'Projetos',
+});
+/** Translate known validation structures without rewriting unknown diagnostics. */
+export function translateHavenMessage(source) {
+  const value=t(source);if(getLanguage()!=='en'||value!==source)return value;
+  const unsupported=String(source).match(/^O caractere “(.+)” não é suportado pela fonte do PDF\. Use o JSON para preservar o texto completo\.$/u);
+  if(unsupported)return t('O caractere “{character}” não é suportado pela fonte do PDF. Use o JSON para preservar o texto completo.',{character:unsupported[1]});
+  return String(source).replace(/^(.+): (objeto inválido\.|texto inválido\.|número inválido\.|lista inválida\.)$/,(_,label,suffix)=>`${t(Object.hasOwn(HAVEN_ERROR_FIELDS,label)?HAVEN_ERROR_FIELDS[label]:label)}: ${t(suffix)}`);
+}
 
 /** Account boundaries and persistence are independent from the page DOM. */
 export function createHavenController({ storage, sessionStorage, locks, location,
@@ -237,13 +251,15 @@ const signed = number => Number(number)>0 ? `+${number}` : String(number ?? 0);
 
 export function setupHavenPage({document,window,localStorage,sessionStorage,navigator,location},dependencies={}) {
   const $ = selector => document.querySelector(selector);
+  setupLanguage({document,window,navigator,localStorage});
   const theme = setupTheme({document,window,localStorage});
   const themeToggle = setupThemeToggle({document,window,theme});
   const transition = createPageTransition({document,window});
   const finishInitialLoading = transition.start({label:'Abrindo refúgios…'});
   let returningToEntry = false;
   let state,tab='refuge',dialogVersion=0,settingsOpen=false,exportBusy=false,urls=[],toastTimer,cleanupPrint;
-  function toast(message,long=false){$('#toast').textContent=message;$('#toast').hidden=false;window.clearTimeout(toastTimer);toastTimer=window.setTimeout(()=>{$('#toast').hidden=true;},long?9000:4000);}
+  const message=translateHavenMessage;
+  function toast(value,long=false){$('#toast').textContent=message(value);$('#toast').hidden=false;window.clearTimeout(toastTimer);toastTimer=window.setTimeout(()=>{$('#toast').hidden=true;},long?9000:4000);}
   const controller=createHavenController({storage:localStorage,sessionStorage,locks:navigator.locks,location,
     timers:window,...dependencies,onToast:toast,onChange:(snapshot,reason)=>{
       const oldScope=state?.user?.id || null;
@@ -265,52 +281,54 @@ export function setupHavenPage({document,window,localStorage,sessionStorage,navi
   state=controller.getState();
   const current = () => state.records.find(item=>item.id===state.activeId);
   const valueAt = path => path.split('.').reduce((value,key)=>value?.[key],current());
+  const bi=(pt,en)=>getLanguage()==='en'?esc(en):`${esc(pt)}<small>${esc(en)}</small>`;
+  const localLabel=source=>{const parts=String(source).match(/^(.*?)\s*<small>(.*?)<\/small>$/);return parts?bi(parts[1],parts[2]):t(source);};
   function field(label,path,{type='text',min=0,max=1000000000,step=1}={}) {
-    return `<label class="field"><span>${label}</span><input type="${type}" data-field="${path}" value="${esc(valueAt(path))}" ${type==='number'?`min="${min}" max="${max}" step="${step}"`:'maxlength="50000"'}></label>`;
+    return `<label class="field"><span>${localLabel(label)}</span><input type="${type}" data-field="${path}" value="${esc(valueAt(path))}" ${type==='number'?`min="${min}" max="${max}" step="${step}"`:'maxlength="50000"'}></label>`;
   }
   const number = (label,path,options={}) => field(label,path,{type:'number',...options});
-  const area = (label,path,rows=3) => `<label class="field"><span>${label}</span><textarea rows="${rows}" maxlength="50000" data-field="${path}">${esc(valueAt(path))}</textarea></label>`;
-  const panel = (pt,en,body,extra='') => `<section class="panel ${extra}"><header class="panel-heading"><h3>${pt}<small>${en}</small></h3></header>${body}</section>`;
+  const area = (label,path,rows=3) => `<label class="field"><span>${localLabel(label)}</span><textarea rows="${rows}" maxlength="50000" data-field="${path}">${esc(valueAt(path))}</textarea></label>`;
+  const panel = (pt,en,body,extra='') => `<section class="panel ${extra}"><header class="panel-heading"><h3>${bi(pt,en)}</h3></header>${body}</section>`;
   function choice(label,path,choices) {
-    return `<label class="field"><span>${label}</span><select data-field="${path}">${choices.map(([value,text])=>`<option value="${esc(value)}" ${String(valueAt(path))===String(value)?'selected':''}>${esc(text)}</option>`).join('')}</select></label>`;
+    return `<label class="field"><span>${localLabel(label)}</span><select data-field="${path}">${choices.map(([value,text])=>`<option value="${esc(value)}" ${String(valueAt(path))===String(value)?'selected':''}>${esc(t(text))}</option>`).join('')}</select></label>`;
   }
-  function metric(label,value,detail='',derived='') {return `<div class="haven-metric"><span>${label}</span><strong ${derived?`data-derived="${derived}"`:''}>${esc(value)}</strong><small>${detail}</small></div>`;}
+  function metric(label,value,detail='',derived='') {return `<div class="haven-metric"><span>${t(label)}</span><strong ${derived?`data-derived="${derived}"`:''}>${esc(value)}</strong>${getLanguage()==='en'?`<small>${derived==='weeklyExpenses'?t('cp / semana'):' '}</small>`:`<small>${detail}</small>`}</div>`;}
   function renderIdentity() {
     $('#haven-identity').innerHTML=`${field('Nome do refúgio <small>Name</small>','name')}<div class="form-grid">${field('Liderança <small>Leadership</small>','leadership')}${field('Localização <small>Location</small>','location')}</div>`;
   }
   function renderMetrics() {
     const haven=current(),derived=deriveHaven(haven);
-    $('#haven-metrics').innerHTML=metric('Nível',haven.level,'Haven level','level')+metric('População',haven.populationRank,'Population rank','populationRank')+metric('Riqueza',haven.wealth,'Wealth','wealth')+metric('Perícia',signed(derived.skill),'Skill','skill')+metric('Despesas',derived.weeklyExpenses,'cp por semana · Weekly expenses','weeklyExpenses');
+    $('#haven-metrics').innerHTML=metric(t('Nível'),haven.level,'Haven level','level')+metric(t('População'),haven.populationRank,'Population rank','populationRank')+metric(t('Riqueza'),haven.wealth,'Wealth','wealth')+metric(t('Perícia'),signed(derived.skill),'Skill','skill')+metric(t('Despesas'),derived.weeklyExpenses,t('cp por semana · Weekly expenses'),'weeklyExpenses');
   }
   function refugePage() {
     const haven=current(),d=deriveHaven(haven);
-    return `<div class="haven-grid">${panel('Atributos','Attributes',`<div class="haven-attributes">${HAVEN_ATTRS.map(attr=>`<label class="haven-attribute"><span>${esc(attr.pt)}<small>${esc(attr.en)}</small></span><input aria-label="${esc(attr.pt)}" type="number" data-field="attributes.${attr.key}" min="0" max="5" value="${haven.attributes[attr.key]}"></label>`).join('')}</div>`)}${panel('Perícias','Skills',`<p class="panel-note">Marque as perícias treinadas do refúgio.</p><div class="haven-skills">${HAVEN_SKILLS.map(skill=>`<label><input type="checkbox" data-trained="${skill.key}" ${haven.trained.includes(skill.key)?'checked':''}><span>${esc(skill.pt)}<small>${esc(skill.en)}</small></span><strong data-skill="${skill.key}">${haven.trained.includes(skill.key)?signed(d.skill):'—'}</strong></label>`).join('')}</div>`)}${panel('Nível & população','Haven level & population',`<div class="form-grid thirds">${choice('Nível do refúgio <small>Haven level</small>','level',HAVEN_LEVELS.map(row=>[row.level,String(row.level)]))}${number('Grau de população <small>Population rank</small>','populationRank')}${number('Nível do grupo <small>Party level</small>','partyLevel',{max:9})}</div><p class="haven-rule-note" id="haven-advance-note">${advanceNote(d)}</p><div class="form-grid thirds">${number('Riqueza <small>Wealth</small>','wealth')}${number('Ajuste de crescimento <small>Growth bonus</small>','bonuses.growth',{min:-10000,max:10000})}${number('Ajuste de declínio <small>Decline bonus</small>','bonuses.decline',{min:-10000,max:10000})}</div><div class="derived-pair"><div><span>Crescimento <small>Growth</small></span><strong data-derived="growth">${signed(d.growth)}</strong></div><div><span>Declínio <small>Decline</small></span><strong data-derived="decline">${signed(d.decline)}</strong></div></div><div class="form-grid" style="margin-top:15px">${choice('Condição da população <small>Population condition</small>','populationMode',[['growth','Crescimento · Growth'],['decline','Declínio · Decline']])}${area('Chegadas <small>Arrivals</small>','arrivals')}</div>`)}${panel('Evento','Event',`${field('Nome do evento <small>Event name</small>','event.name')}<div class="haven-event-clock">${number('Marcas <small>Clock</small>','event.clock',{max:10000})}${number('Segmentos <small>Segments</small>','event.segments',{min:1,max:10000})}<progress id="event-progress" value="${haven.event.clock}" max="${haven.event.segments}" aria-label="Progresso do evento"></progress></div>${area('Registro do evento <small>Event notes</small>','event.notes',4)}<p class="panel-note">O relógio registra o evento decidido na mesa; alterar as marcas não dispara efeitos automaticamente.</p>`)}</div>`;
+    return `<div class="haven-grid">${panel(t('Atributos'),'Attributes',`<div class="haven-attributes">${HAVEN_ATTRS.map(attr=>`<label class="haven-attribute"><span>${bi(attr.pt,attr.en)}</span><input aria-label="${esc(t(attr.pt))}" type="number" data-field="attributes.${attr.key}" min="0" max="5" value="${haven.attributes[attr.key]}"></label>`).join('')}</div>`)}${panel(t('Perícias'),'Skills',`<p class="panel-note">${t('Marque as perícias treinadas do refúgio.')}</p><div class="haven-skills">${HAVEN_SKILLS.map(skill=>`<label><input type="checkbox" data-trained="${skill.key}" ${haven.trained.includes(skill.key)?'checked':''}><span>${bi(skill.pt,skill.en)}</span><strong data-skill="${skill.key}">${haven.trained.includes(skill.key)?signed(d.skill):'—'}</strong></label>`).join('')}</div>`)}${panel(t('Nível & população'),'Haven level & population',`<div class="form-grid thirds">${choice('Nível do refúgio <small>Haven level</small>','level',HAVEN_LEVELS.map(row=>[row.level,String(row.level)]))}${number('Grau de população <small>Population rank</small>','populationRank')}${number('Nível do grupo <small>Party level</small>','partyLevel',{max:9})}</div><p class="haven-rule-note" id="haven-advance-note">${advanceNote(d)}</p><div class="form-grid thirds">${number('Riqueza <small>Wealth</small>','wealth')}${number('Ajuste de crescimento <small>Growth bonus</small>','bonuses.growth',{min:-10000,max:10000})}${number('Ajuste de declínio <small>Decline bonus</small>','bonuses.decline',{min:-10000,max:10000})}</div><div class="derived-pair"><div><span>${bi('Crescimento','Growth')}</span><strong data-derived="growth">${signed(d.growth)}</strong></div><div><span>${bi('Declínio','Decline')}</span><strong data-derived="decline">${signed(d.decline)}</strong></div></div><div class="form-grid" style="margin-top:15px">${choice('Condição da população <small>Population condition</small>','populationMode',[['growth',t('Crescimento · Growth')],['decline',t('Declínio · Decline')]])}${area('Chegadas <small>Arrivals</small>','arrivals')}</div>`)}${panel(t('Evento'),'Event',`${field('Nome do evento <small>Event name</small>','event.name')}<div class="haven-event-clock">${number('Marcas <small>Clock</small>','event.clock',{max:10000})}${number('Segmentos <small>Segments</small>','event.segments',{min:1,max:10000})}<progress id="event-progress" value="${haven.event.clock}" max="${haven.event.segments}" aria-label="${t('Progresso do evento')}"></progress></div>${area('Registro do evento <small>Event notes</small>','event.notes',4)}<p class="panel-note">${t('O relógio registra o evento decidido na mesa; alterar as marcas não dispara efeitos automaticamente.')}</p>`)}</div>`;
   }
   function advanceNote(d) {
-    if(d.nextPopulationRank===null || d.nextPopulationRank===undefined)return 'Último nível da tabela de refúgios. O nível permanece um registro manual.';
-    return `Próximo grau de população: ${d.nextPopulationRank}. ${d.canAdvance?'Confira os requisitos do livro antes de avançar.':'Confira o nível do grupo e a população antes de avançar.'} O avanço é manual.`;
+    if(d.nextPopulationRank===null || d.nextPopulationRank===undefined)return t('Último nível da tabela de refúgios. O nível permanece um registro manual.');
+    return t('Próximo grau de população: {rank}. {requirements} O avanço é manual.',{rank:d.nextPopulationRank,requirements:d.canAdvance?t('Confira os requisitos do livro antes de avançar.'):t('Confira o nível do grupo e a população antes de avançar.')});
   }
   function rowsPanel(key) {
     const definition=ROWS[key],rows=current()[key];
-    return panel(definition.pt,definition.en,`<div class="haven-list-toolbar"><p class="panel-note">${rows.length} ${rows.length===1?'registro':'registros'}</p><button type="button" class="button" data-icon="plus" data-action="add-row" data-list="${key}" aria-label="Adicionar ${key==='finishedBuildings'?'construção concluída':definition.item.toLocaleLowerCase('pt-BR')}">Adicionar</button></div><div class="haven-rows">${rows.length?rows.map((row,index)=>`<article class="haven-row"><div class="haven-row-header"><h4>${definition.item} ${index+1}</h4><button type="button" class="icon-button" data-icon="trash" data-action="remove-row" data-list="${key}" data-row-id="${esc(row.id)}" aria-label="Excluir ${definition.item.toLocaleLowerCase('pt-BR')} ${index+1}"></button></div>${field('Nome <small>Name</small>',`${key}.${index}.name`)}${definition.fields.length?`<div class="form-grid ${definition.fields.length>2?'thirds':''}">${definition.fields.map(([name,pt,en,type])=>field(`${pt} <small>${en}</small>`,`${key}.${index}.${name}`,{type:type||'text'})).join('')}</div>`:''}${definition.clock?`<div class="form-grid">${number('Marcas <small>Clock</small>',`${key}.${index}.clock`,{max:10000})}${number('Segmentos <small>Segments</small>',`${key}.${index}.segments`,{min:1,max:10000})}</div>`:''}${area('Anotações <small>Notes</small>',`${key}.${index}.notes`,2)}${key==='builds'?`<div class="haven-row-actions"><button type="button" class="button" data-icon="check" data-action="finish-build" data-row-id="${esc(row.id)}">Registrar conclusão</button></div>`:''}</article>`).join(''):'<p class="haven-empty">Nenhum registro. Use Adicionar para começar.</p>'}</div>`);
+    return panel(definition.pt,definition.en,`<div class="haven-list-toolbar"><p class="panel-note">${rows.length} ${rows.length===1?t('registro'):t('registros')}</p><button type="button" class="button" data-icon="plus" data-action="add-row" data-list="${key}" aria-label="${t('Adicionar {item}',{item:key==='finishedBuildings'?t('construção concluída'):t(definition.item.toLocaleLowerCase('pt-BR'))})}">${t('Adicionar')}</button></div><div class="haven-rows">${rows.length?rows.map((row,index)=>`<article class="haven-row"><div class="haven-row-header"><h4>${t(definition.item)} ${index+1}</h4><button type="button" class="icon-button" data-icon="trash" data-action="remove-row" data-list="${key}" data-row-id="${esc(row.id)}" aria-label="${t('Excluir {item} {number}',{item:t(definition.item.toLocaleLowerCase('pt-BR')),number:index+1})}"></button></div>${field('Nome <small>Name</small>',`${key}.${index}.name`)}${definition.fields.length?`<div class="form-grid ${definition.fields.length>2?'thirds':''}">${definition.fields.map(([name,pt,en,type])=>field(`${pt} <small>${en}</small>`,`${key}.${index}.${name}`,{type:type||'text'})).join('')}</div>`:''}${definition.clock?`<div class="form-grid">${number('Marcas <small>Clock</small>',`${key}.${index}.clock`,{max:10000})}${number('Segmentos <small>Segments</small>',`${key}.${index}.segments`,{min:1,max:10000})}</div>`:''}${area('Anotações <small>Notes</small>',`${key}.${index}.notes`,2)}${key==='builds'?`<div class="haven-row-actions"><button type="button" class="button" data-icon="check" data-action="finish-build" data-row-id="${esc(row.id)}">${t('Registrar conclusão')}</button></div>`:''}</article>`).join(''):`<p class="haven-empty">${t('Nenhum registro. Use Adicionar para começar.')}</p>`}</div>`);
   }
   function constructionPage() {
     const d=deriveHaven(current());
     return `<p class="haven-rule-note" id="haven-capacity">${capacityNote(d)}</p><div class="haven-grid">${rowsPanel('builds')}${rowsPanel('finishedBuildings')}${rowsPanel('projects')}${rowsPanel('strongholds')}</div>`;
   }
-  const capacityNote = d => `Espaços de construção: ${d.activeBuilds}/${d.buildSlots}. Construções concluídas: ${d.buildingCount}/${d.buildingLimit}. ${d.overBuildSlots||d.overBuildingLimit?'Há registros acima do limite do nível; confira as exceções na mesa.':'Os limites são informativos; a ficha preserva todos os registros.'}`;
+  const capacityNote = d => t('Espaços de construção: {active}/{slots}. Construções concluídas: {count}/{limit}. {note}',{active:d.activeBuilds,slots:d.buildSlots,count:d.buildingCount,limit:d.buildingLimit,note:d.overBuildSlots||d.overBuildingLimit?t('Há registros acima do limite do nível; confira as exceções na mesa.'):t('Os limites são informativos; a ficha preserva todos os registros.')});
   function economyPage() {
     const haven=current(),d=deriveHaven(haven);
-    return `<div class="haven-grid">${panel('Trabalhadores','Hirelings',`<p class="panel-note">Quantidades e custo semanal em cp. As taxas do livro podem ser ajustadas para a sua mesa. Artesão, cozinheiro e arauto usam 100 cp do livro; a folha oficial imprime 50 cp.</p><div class="haven-hirelings">${HIRELING_TYPES.map(type=>`<div>${number(`${esc(type.pt)} <small>${esc(type.en)}</small>`,`hirelings.${type.key}`,{max:10000})}${number('cp / semana',`hirelingRates.${type.key}`)}</div>`).join('')}</div><div class="form-grid" style="margin-top:18px">${number('Nível dos mercenários <small>Mercenary level</small>','mercenaryLevel',{min:1,max:9})}${number('Ajuste de despesas <small>Expense bonus</small>','bonuses.expenses',{min:-1000000000})}</div><p class="panel-note">A taxa dos mercenários é multiplicada pelo nível registrado. O custo não é debitado automaticamente da riqueza.</p><div class="derived-pair"><div><span>Trabalhadores <small>Hirelings</small></span><strong data-derived="totalHirelings">${d.totalHirelings}</strong></div><div><span>Despesas semanais <small>Weekly expenses · cp</small></span><strong data-derived="weeklyExpenses">${d.weeklyExpenses}</strong></div></div>`)}<div>${rowsPanel('productionChains')}${panel('Itens armazenados','Stored items',area('Itens <small>Items</small>','storedItems',10))}</div></div>`;
+    return `<div class="haven-grid">${panel(t('Trabalhadores'),'Hirelings',`<p class="panel-note">${t('Quantidades e custo semanal em cp. As taxas do livro podem ser ajustadas para a sua mesa. Artesão, cozinheiro e arauto usam 100 cp do livro; a folha oficial imprime 50 cp.')}</p><div class="haven-hirelings">${HIRELING_TYPES.map(type=>`<div>${number(`${esc(type.pt)} <small>${esc(type.en)}</small>`,`hirelings.${type.key}`,{max:10000})}${number(t('cp / semana'),`hirelingRates.${type.key}`)}</div>`).join('')}</div><div class="form-grid" style="margin-top:18px">${number('Nível dos mercenários <small>Mercenary level</small>','mercenaryLevel',{min:1,max:9})}${number('Ajuste de despesas <small>Expense bonus</small>','bonuses.expenses',{min:-1000000000})}</div><p class="panel-note">${t('A taxa dos mercenários é multiplicada pelo nível registrado. O custo não é debitado automaticamente da riqueza.')}</p><div class="derived-pair"><div><span>${bi('Trabalhadores','Hirelings')}</span><strong data-derived="totalHirelings">${d.totalHirelings}</strong></div><div><span>${bi('Despesas semanais','Weekly expenses · cp')}</span><strong data-derived="weeklyExpenses">${d.weeklyExpenses}</strong></div></div>`)}<div>${rowsPanel('productionChains')}${panel(t('Itens armazenados'),'Stored items',area('Itens <small>Items</small>','storedItems',10))}</div></div>`;
   }
-  function notesPage() {return panel('Anotações do refúgio','Haven notes',`${area('Diário & decisões da mesa <small>Journal & rulings</small>','notes',18)}<p class="panel-note">Registre aqui acontecimentos, exceções e efeitos dos edifícios. O registro não aplica ciclos semanais nem muda a população, os relógios, o nível ou a riqueza sozinho.</p>`);}
+  function notesPage() {return panel(t('Anotações do refúgio'),'Haven notes',`${area('Diário & decisões da mesa <small>Journal & rulings</small>','notes',18)}<p class="panel-note">${t('Registre aqui acontecimentos, exceções e efeitos dos edifícios. O registro não aplica ciclos semanais nem muda a população, os relógios, o nível ou a riqueza sozinho.')}</p>`);}
   const pages={refuge:refugePage,construction:constructionPage,economy:economyPage,notes:notesPage};
   function render() {
     const focused=document.activeElement,path=focused?.dataset.field;
     const selection=path&&(focused.tagName==='TEXTAREA'||focused.type==='text')?{start:focused.selectionStart,end:focused.selectionEnd,scroll:focused.scrollTop}:null;
-    const picker=$('#haven-select');picker.innerHTML=state.records.map(item=>`<option value="${esc(item.id)}" ${item.id===state.activeId?'selected':''}>${esc(item.name||'Novo refúgio')}</option>`).join('');
+    const picker=$('#haven-select');picker.innerHTML=state.records.map(item=>`<option value="${esc(item.id)}" ${item.id===state.activeId?'selected':''}>${esc(item.name||t('Novo refúgio'))}</option>`).join('');
     renderIdentity();renderMetrics();
-    $('#navigation').innerHTML=TABS.map(([key,label,symbol])=>`<button type="button" class="nav-item ${tab===key?'active':''}" data-tab="${key}" ${tab===key?'aria-current="page"':''}>${icon(symbol,'nav-icon')}<span>${label}</span></button>`).join('');
+    $('#navigation').innerHTML=TABS.map(([key,label,symbol])=>`<button type="button" class="nav-item ${tab===key?'active':''}" data-tab="${key}" ${tab===key?'aria-current="page"':''}>${icon(symbol,'nav-icon')}<span>${t(label)}</span></button>`).join('');
     $('#haven-content').innerHTML=pages[tab]();mountButtonIcons(document);refreshStatus();
     if(path){const next=document.querySelector(`[data-field="${CSS.escape(path)}"]`);next?.focus({preventScroll:true});if(selection&&next?.setSelectionRange){next.setSelectionRange(selection.start,selection.end);next.scrollTop=selection.scroll;}}
   }
@@ -322,34 +340,34 @@ export function setupHavenPage({document,window,localStorage,sessionStorage,navi
     if($('#event-progress')){$('#event-progress').max=haven.event.segments;$('#event-progress').value=haven.event.clock;}
     if($('#haven-advance-note'))$('#haven-advance-note').textContent=advanceNote(d);
     if($('#haven-capacity'))$('#haven-capacity').textContent=capacityNote(d);
-    const selected=$('#haven-select').selectedOptions?.[0];if(selected)selected.textContent=haven.name||'Novo refúgio';
+    const selected=$('#haven-select').selectedOptions?.[0];if(selected)selected.textContent=haven.name||t('Novo refúgio');
   }
   function refreshStatus() {
-    $('#breadcrumb-name').textContent=current().name||'Novo refúgio';
-    $('#save-status').textContent=state.statusLabel;$('#save-status').dataset.state=state.user?state.status.state:state.unsafe?'error':'local';
+    $('#breadcrumb-name').textContent=current().name||t('Novo refúgio');
+    $('#save-status').textContent=message(state.statusLabel);$('#save-status').dataset.state=state.user?state.status.state:state.unsafe?'error':'local';
     $('#main').inert=!state.ready||!state.user||!state.canEdit;$('#main').setAttribute('aria-busy',String(!state.ready||state.loading));
     for(const selector of ['#new-haven','#import-button','#haven-select','#manage-haven'])$(selector).disabled=!state.ready||!state.user||!state.canEdit;
     $('#export-button').disabled=exportBusy||!state.ready||state.loading||Boolean(state.user&&!state.cloudReady);$('#export-button').setAttribute('aria-busy',String(exportBusy));
     const entryStatus=$('#haven-entry-status');
-    const entryMessage=state.problem||state.blocked||(state.sessionChecked&&!state.user&&state.unsafe?'Há uma cópia que não foi salva. Exporte-a antes de sair desta página.':'');
-    entryStatus.hidden=!entryMessage;entryStatus.textContent=entryMessage;
-    if(settingsOpen&&$('#utility-dialog').open){const status=$('#dialog-content .account-sync-status');if(status)status.textContent=state.statusLabel;}
+    const entryMessage=state.problem||state.blocked||(state.sessionChecked&&!state.user&&state.unsafe?t('Há uma cópia que não foi salva. Exporte-a antes de sair desta página.'):'');
+    entryStatus.hidden=!entryMessage;entryStatus.textContent=message(entryMessage);
+    if(settingsOpen&&$('#utility-dialog').open){const status=$('#dialog-content .account-sync-status');if(status)status.textContent=message(state.statusLabel);}
   }
   function retireUrls(){const old=urls;urls=[];if(old.length)window.setTimeout(()=>old.forEach(url=>URL.revokeObjectURL(url)),60000);}
   function invalidateDialog(){dialogVersion++;retireUrls();}
-  function showDialog(title,html){settingsOpen=false;invalidateDialog();$('#dialog-title').textContent=title;$('#dialog-content').innerHTML=html;mountButtonIcons($('#dialog-content'));if(!$('#utility-dialog').open)$('#utility-dialog').showModal();return dialogVersion;}
+  function showDialog(title,html){settingsOpen=false;invalidateDialog();$('#dialog-title').textContent=t(title);$('#dialog-content').innerHTML=html;translateStatic($('#dialog-content'));mountButtonIcons($('#dialog-content'));if(!$('#utility-dialog').open)$('#utility-dialog').showModal();return dialogVersion;}
   function closeDialog(){settingsOpen=false;invalidateDialog();$('#utility-dialog').close();}
   function settingsContent() {
-    const choices=[['light','Claro','torch'],['dark','Modo escuro','moon'],['system','Automático','settings']];
+    const choices=[['light',t('Claro'),'torch'],['dark',t('Modo escuro'),'moon'],['system',t('Automático'),'settings']];
     let account='';
-    const problem=state.problem?`<p class="inline-warning" role="alert">${esc(state.problem)}</p>`:'';
-    if(!state.ready)account='<p role="status">Verificando sua conta…</p>';
-    else if(!state.user)account=`<p>Entre pela tela inicial para acessar seus refúgios privados em seus dispositivos.</p>${problem}<div class="dialog-actions"><a class="button primary" href="./#inicio" data-icon="gate"><span class="button-label">Ir para início</span></a></div><p class="panel-note">As cópias existentes neste navegador são preservadas.</p>`;
-    else account=`<p class="account-identity"><span class="eyebrow">SUA CONTA</span><strong>${esc(state.user.email||'Conta conectada')}</strong></p><p>Refúgios e personagens compartilham a conta. Os registros são privados.</p><p class="account-sync-status" role="status">${esc(state.statusLabel)}</p>${problem}<div class="dialog-actions"><button type="button" class="button" data-action="logout" data-icon="logout" ${!state.canLogout?'disabled':''}>Sair deste dispositivo</button>${state.unsafe?'<button type="button" class="button" data-action="export" data-icon="export">Exportar uma cópia</button>':''}</div>${state.migrationCount?`<div class="local-migration"><h3>Refúgios deste navegador</h3><p>Você pode copiar ${state.migrationCount} ${state.migrationCount===1?'refúgio local':'refúgios locais'} para esta conta. A cópia local será mantida.</p><button type="button" class="button" data-action="migrate" data-icon="import" ${!state.cloudReady||state.authBusy?'disabled':''}>Salvar meus refúgios locais na conta</button></div>`:''}<p class="panel-note">${state.unsafe?'Há edições que não foram guardadas. Exporte uma cópia e mantenha a página aberta.':state.status.pending?'Alterações pendentes ficam neste navegador para sincronizar quando você entrar novamente.':'O salvamento é automático. PDF e JSON são cópias independentes.'}</p>`;
-    return `<section class="settings-appearance" aria-labelledby="appearance-title"><h3 id="appearance-title">Aparência</h3><div class="settings-themes" role="group" aria-label="Tema da ficha">${choices.map(([value,label,symbol])=>`<button type="button" class="button" data-icon="${symbol}" data-action="theme" data-theme-value="${value}" aria-pressed="${theme.getPreference()===value}">${label}</button>`).join('')}</div><p class="panel-note">Automático acompanha o tema do dispositivo. A escolha fica salva neste navegador.</p></section><section class="settings-section"><h3>Conta</h3>${account}</section>`;
+    const problem=state.problem?`<p class="inline-warning" role="alert">${esc(message(state.problem))}</p>`:'';
+    if(!state.ready)account=`<p role="status">${t('Verificando sua conta…')}</p>`;
+    else if(!state.user)account=`<p>${t('Entre pela tela inicial para acessar seus refúgios privados em seus dispositivos.')}</p>${problem}<div class="dialog-actions"><a class="button primary" href="./#inicio" data-icon="gate"><span class="button-label">${t('Ir para início')}</span></a></div><p class="panel-note">${t('As cópias existentes neste navegador são preservadas.')}</p>`;
+    else account=`<p class="account-identity"><span class="eyebrow">${t('SUA CONTA')}</span><strong>${esc(state.user.email||t('Conta conectada'))}</strong></p><p>${t('Refúgios e personagens compartilham a conta. Os registros são privados.')}</p><p class="account-sync-status" role="status">${esc(message(state.statusLabel))}</p>${problem}<div class="dialog-actions"><button type="button" class="button" data-action="logout" data-icon="logout" ${!state.canLogout?'disabled':''}>${t('Sair deste dispositivo')}</button>${state.unsafe?`<button type="button" class="button" data-action="export" data-icon="export">${t('Exportar uma cópia')}</button>`:''}</div>${state.migrationCount?`<div class="local-migration"><h3>${t('Refúgios deste navegador')}</h3><p>${t('Você pode copiar {count} {records} para esta conta. A cópia local será mantida.',{count:state.migrationCount,records:state.migrationCount===1?t('refúgio local'):t('refúgios locais')})}</p><button type="button" class="button" data-action="migrate" data-icon="import" ${!state.cloudReady||state.authBusy?'disabled':''}>${t('Salvar meus refúgios locais na conta')}</button></div>`:''}<p class="panel-note">${state.unsafe?t('Há edições que não foram guardadas. Exporte uma cópia e mantenha a página aberta.'):state.status.pending?t('Alterações pendentes ficam neste navegador para sincronizar quando você entrar novamente.'):t('O salvamento é automático. PDF e JSON são cópias independentes.')}</p>`;
+    return `<section class="settings-appearance" aria-labelledby="appearance-title"><h3 id="appearance-title">${t('Aparência')}</h3><div class="settings-themes" role="group" aria-label="${t('Tema da ficha')}">${choices.map(([value,label,symbol])=>`<button type="button" class="button" data-icon="${symbol}" data-action="theme" data-theme-value="${value}" aria-pressed="${theme.getPreference()===value}">${label}</button>`).join('')}</div><p class="panel-note">${t('Automático acompanha o tema do dispositivo. A escolha fica salva neste navegador.')}</p></section>${languageSettingsMarkup()}<section class="settings-section"><h3>${t('Conta')}</h3>${account}</section>`;
   }
-  function openSettings(){showDialog('Configurações',settingsContent());settingsOpen=true;}
-  function refreshSettings(){if(!settingsOpen)return;$('#dialog-content').innerHTML=settingsContent();mountButtonIcons($('#dialog-content'));}
+  function openSettings(){showDialog(t('Configurações'),settingsContent());settingsOpen=true;}
+  function refreshSettings(){if(!settingsOpen)return;const selectedLanguage=document.activeElement?.hasAttribute?.('data-language-preference');$('#dialog-title').textContent=t('Configurações');$('#dialog-content').innerHTML=settingsContent();mountButtonIcons($('#dialog-content'));if(selectedLanguage)$('#dialog-content [data-language-preference]')?.focus({preventScroll:true});}
   function exportLink(value,type,filename,label,primary=false) {
     const url=URL.createObjectURL(new Blob([value],{type}));urls.push(url);
     return `<a class="button${primary?' primary':''}" href="${esc(url)}" download="${esc(filename)}">${icon('export')}<span class="button-label">${label}</span></a>`;
@@ -358,18 +376,18 @@ export function setupHavenPage({document,window,localStorage,sessionStorage,navi
     if(exportBusy||state.loading||state.user&&!state.cloudReady)return;
     exportBusy=true;refreshStatus();
     const snapshot=clone(current()),backup=JSON.stringify({format:'trespasser-haven',version:1,rules:'2.1.3',haven:snapshot},null,2);
-    const owner=showDialog('Preparando exportação',`<p role="status">Gerando o PDF preenchível e o JSON de <strong>${esc(snapshot.name||'Novo refúgio')}</strong>…</p>`);
+    const owner=showDialog(t('Preparando exportação'),`<p role="status">${t('Gerando o PDF preenchível e o JSON de')} <strong>${esc(snapshot.name||t('Novo refúgio'))}</strong>…</p>`);
     try {
       const {prepareHavenExport}=await import('./haven-export.js');
       const result=await prepareHavenExport(snapshot);
       if(owner!==dialogVersion||!$('#utility-dialog').open)return;
-      $('#dialog-title').textContent='PDF + JSON prontos';
-      $('#dialog-content').innerHTML=`<p role="status">O ZIP reúne o PDF preenchível e o JSON do refúgio. Use os links para baixar os arquivos separados.</p><div class="dialog-actions export-downloads">${exportLink(result.zip,'application/zip',`${result.stem}.zip`,'Baixar ZIP',true)}${exportLink(result.pdf,'application/pdf',`${result.stem}.pdf`,'Baixar PDF editável')}${exportLink(result.json,'application/json',`${result.stem}.json`,'Baixar JSON')}</div><p class="panel-note">Importar o JSON cria uma nova ficha. Alterações nesses arquivos são independentes do registro online.</p>`;
+      $('#dialog-title').textContent=t('PDF + JSON prontos');
+      $('#dialog-content').innerHTML=`<p role="status">${t('O ZIP reúne o PDF preenchível e o JSON do refúgio. Use os links para baixar os arquivos separados.')}</p><div class="dialog-actions export-downloads">${exportLink(result.zip,'application/zip',`${result.stem}.zip`,t('Baixar ZIP'),true)}${exportLink(result.pdf,'application/pdf',`${result.stem}.pdf`,t('Baixar PDF editável'))}${exportLink(result.json,'application/json',`${result.stem}.json`,t('Baixar JSON'))}</div><p class="panel-note">${t('Importar o JSON cria uma nova ficha. Alterações nesses arquivos são independentes do registro online.')}</p>`;
       $('#dialog-content a').focus({preventScroll:true});$('#dialog-content a').click();
     } catch(error) {
       if(owner!==dialogVersion||!$('#utility-dialog').open)return;
-      $('#dialog-title').textContent='A exportação do PDF não foi concluída';
-      $('#dialog-content').innerHTML=`<p role="alert">${esc(error?.message||'Não foi possível gerar o PDF agora.')}</p><p>Seus dados continuam no registro. Baixe o JSON de backup para preservar esta versão.</p><div class="dialog-actions">${exportLink(backup,'application/json','trespasser-refugio.json','Baixar JSON de backup',true)}</div>`;
+      $('#dialog-title').textContent=t('A exportação do PDF não foi concluída');
+      $('#dialog-content').innerHTML=`<p role="alert">${esc(message(error?.message||'Não foi possível gerar o PDF agora.'))}</p><p>${t('Seus dados continuam no registro. Baixe o JSON de backup para preservar esta versão.')}</p><div class="dialog-actions">${exportLink(backup,'application/json','trespasser-refugio.json',t('Baixar JSON de backup'),true)}</div>`;
     } finally {exportBusy=false;refreshStatus();}
   }
   function addRow(key) {
@@ -406,37 +424,43 @@ export function setupHavenPage({document,window,localStorage,sessionStorage,navi
     if(action==='logout')void controller.logout();
     if(action==='migrate')void controller.migrate();
     if(action==='export')void exportHaven();
-    if(action==='duplicate'){controller.duplicate();closeDialog();toast('Cópia criada.');}
-    if(action==='delete')showDialog('Excluir refúgio',`<p>Excluir <strong>${esc(current().name||'Novo refúgio')}</strong>? A exclusão será sincronizada com a conta quando houver conexão.</p><div class="dialog-actions"><button type="button" class="button danger" data-icon="trash" data-action="confirm-delete" data-record-id="${esc(state.activeId)}">Excluir refúgio</button><button type="button" class="button" data-action="cancel">Cancelar</button></div>`);
-    if(action==='confirm-delete'){controller.remove(button.dataset.recordId);closeDialog();toast('Refúgio excluído.');}
+    if(action==='duplicate'){controller.duplicate();closeDialog();toast(t('Cópia criada.'));}
+    if(action==='delete')showDialog(t('Excluir refúgio'),`<p>${t('Excluir {name}? A exclusão será sincronizada com a conta quando houver conexão.',{name:`<strong>${esc(current().name||t('Novo refúgio'))}</strong>`})}</p><div class="dialog-actions"><button type="button" class="button danger" data-icon="trash" data-action="confirm-delete" data-record-id="${esc(state.activeId)}">${t('Excluir refúgio')}</button><button type="button" class="button" data-action="cancel">${t('Cancelar')}</button></div>`);
+    if(action==='confirm-delete'){controller.remove(button.dataset.recordId);closeDialog();toast(t('Refúgio excluído.'));}
     if(action==='cancel')closeDialog();
     if(action==='add-row')addRow(list);
-    if(action==='remove-row'&&Object.hasOwn(ROWS,list))showDialog('Excluir registro',`<p>Excluir este registro de ${esc(ROWS[list].pt.toLocaleLowerCase('pt-BR'))}?</p><div class="dialog-actions"><button type="button" class="button danger" data-action="confirm-remove-row" data-list="${list}" data-row-id="${esc(rowId)}" data-record-id="${esc(state.activeId)}" data-icon="trash">Excluir</button><button type="button" class="button" data-action="cancel">Cancelar</button></div>`);
+    if(action==='remove-row'&&Object.hasOwn(ROWS,list))showDialog(t('Excluir registro'),`<p>${t('Excluir este registro de {item}?',{item:esc(t(ROWS[list].pt.toLocaleLowerCase('pt-BR')))})}</p><div class="dialog-actions"><button type="button" class="button danger" data-action="confirm-remove-row" data-list="${list}" data-row-id="${esc(rowId)}" data-record-id="${esc(state.activeId)}" data-icon="trash">${t('Excluir')}</button><button type="button" class="button" data-action="cancel">${t('Cancelar')}</button></div>`);
     if(action==='confirm-remove-row'&&Object.hasOwn(ROWS,list)){controller.change(data=>{const record=data.find(item=>item.id===button.dataset.recordId);if(record)record[list]=record[list].filter(row=>row.id!==rowId);},'records');closeDialog();}
-    if(action==='finish-build')showDialog('Concluir construção',`<p>Registrar esta construção como concluída? Seu nome e anotações serão preservados na lista de construções concluídas.</p><div class="dialog-actions"><button type="button" class="button" data-action="confirm-finish" data-row-id="${esc(rowId)}" data-record-id="${esc(state.activeId)}" data-icon="check">Registrar conclusão</button><button type="button" class="button" data-action="cancel">Cancelar</button></div>`);
+    if(action==='finish-build')showDialog(t('Concluir construção'),`<p>${t('Registrar esta construção como concluída? Seu nome e anotações serão preservados na lista de construções concluídas.')}</p><div class="dialog-actions"><button type="button" class="button" data-action="confirm-finish" data-row-id="${esc(rowId)}" data-record-id="${esc(state.activeId)}" data-icon="check">${t('Registrar conclusão')}</button><button type="button" class="button" data-action="cancel">${t('Cancelar')}</button></div>`);
     if(action==='confirm-finish'){controller.change(data=>{const record=data.find(item=>item.id===button.dataset.recordId),row=record?.builds.find(item=>item.id===rowId);if(row){record.finishedBuildings.push({id:crypto.randomUUID(),name:row.name,notes:row.notes});record.builds=record.builds.filter(item=>item.id!==rowId);}},'records');closeDialog();}
   });
   $('#new-haven').addEventListener('click',()=>{controller.add();tab='refuge';render();$('[data-field="name"]').focus();});
   $('#haven-select').addEventListener('change',event=>{controller.select(event.target.value);});
-  $('#manage-haven').addEventListener('click',()=>showDialog('Gerenciar refúgio','<div class="menu-actions"><button type="button" class="button" data-action="duplicate" data-icon="duplicate">Duplicar refúgio</button><button type="button" class="button" data-action="export" data-icon="export">Exportar PDF + JSON</button><button type="button" class="button danger" data-action="delete" data-icon="trash">Excluir refúgio</button></div>'));
+  $('#manage-haven').addEventListener('click',()=>showDialog(t('Gerenciar refúgio'),`<div class="menu-actions"><button type="button" class="button" data-action="duplicate" data-icon="duplicate">${t('Duplicar refúgio')}</button><button type="button" class="button" data-action="export" data-icon="export">${t('Exportar PDF + JSON')}</button><button type="button" class="button danger" data-action="delete" data-icon="trash">${t('Excluir refúgio')}</button></div>`));
   $('#account-button').addEventListener('click',openSettings);
   $('#export-button').addEventListener('click',()=>{void exportHaven();});
   $('#import-button').addEventListener('click',()=>{$('#import-file').value='';$('#import-file').click();});
   $('#import-file').addEventListener('change',async event=>{
     const file=event.target.files?.[0];if(!file)return;
     const owner=state.user?.id||null;
-    try{if(file.size>2000000)throw new Error('O JSON deve ter no máximo 2 MB.');const input=JSON.parse(await file.text());if(owner!==(state.user?.id||null))throw new Error('A conta mudou durante a importação. Tente novamente.');controller.importRecord(input);tab='refuge';render();toast('Refúgio importado como uma nova ficha.');}
-    catch(error){toast(error?.message||'Não foi possível importar este JSON.',true);}
+    try{if(file.size>2000000)throw new Error(t('O JSON deve ter no máximo 2 MB.'));const input=JSON.parse(await file.text());if(owner!==(state.user?.id||null))throw new Error(t('A conta mudou durante a importação. Tente novamente.'));controller.importRecord(input);tab='refuge';render();toast(t('Refúgio importado como uma nova ficha.'));}
+    catch(error){toast(error?.message||t('Não foi possível importar este JSON.'),true);}
   });
-  $('#about-button').addEventListener('click',()=>showDialog('Regras & salvamento','<p>Registro não oficial de Refúgios baseado no Haven Record e no Rulebook de Trespasser v2.1.3. Os termos originais acompanham a tradução para facilitar a consulta.</p><p>A ficha calcula os valores derivados dos campos registrados. Nível, população, riqueza, projetos, eventos e passagens de semana continuam sob controle da mesa. Nenhuma alteração dispara efeitos do livro automaticamente.</p><p>Ao entrar com Google, seus refúgios ficam privados na conta e disponíveis em seus dispositivos. Sem conexão, as edições ficam pendentes no navegador. Sem entrar, o salvamento é apenas local. Alterações conflitantes são preservadas em cópias.</p><p>Exportar prepara um ZIP com PDF preenchível e JSON. Os arquivos são cópias independentes; importar um JSON cria um novo refúgio.</p><p class="panel-note">O PDF editável inclui todos os campos e registros, inclusive listas que precisem de páginas adicionais.</p>'));
+  $('#about-button').addEventListener('click',()=>showDialog(t('Regras & salvamento'),`<p>${t('Registro não oficial de Refúgios baseado no Haven Record e no Rulebook de Trespasser v2.1.3. Os termos originais acompanham a tradução para facilitar a consulta.')}</p><p>${t('A ficha calcula os valores derivados dos campos registrados. Nível, população, riqueza, projetos, eventos e passagens de semana continuam sob controle da mesa. Nenhuma alteração dispara efeitos do livro automaticamente.')}</p><p>${t('Ao entrar com Google, seus refúgios ficam privados na conta e disponíveis em seus dispositivos. Sem conexão, as edições ficam pendentes no navegador. Sem entrar, o salvamento é apenas local. Alterações conflitantes são preservadas em cópias.')}</p><p>${t('Exportar prepara um ZIP com PDF preenchível e JSON. Os arquivos são cópias independentes; importar um JSON cria um novo refúgio.')}</p><p class="panel-note">${t('O PDF editável inclui todos os campos e registros, inclusive listas que precisem de páginas adicionais.')}</p>`));
   $('#dialog-close').addEventListener('click',closeDialog);
   $('#utility-dialog').addEventListener('cancel',()=>{settingsOpen=false;invalidateDialog();});
   $('#utility-dialog').addEventListener('close',()=>{settingsOpen=false;invalidateDialog();});
   window.addEventListener('trespasser:theme',()=>{if(settingsOpen)refreshSettings();});
+  window.addEventListener('trespasser:language',()=>{
+    const focusedTab=document.activeElement?.dataset?.tab;
+    translateStatic(document);render();
+    if(settingsOpen)refreshSettings();
+    if(focusedTab)document.querySelector(`[data-tab="${focusedTab}"]`)?.focus({preventScroll:true});
+  });
   window.addEventListener('online',()=>{void controller.sync();});
   window.addEventListener('focus',()=>{void controller.sync();});
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)void controller.sync();});
-  window.addEventListener('storage',event=>{if(event.key===HAVEN_KEY&&!state.user){controller.externalGuestChange();toast('O registro mudou em outra aba. Exporte sua versão e recarregue.',true);}});
+  window.addEventListener('storage',event=>{if(event.key===HAVEN_KEY&&!state.user){controller.externalGuestChange();toast(t('O registro mudou em outra aba. Exporte sua versão e recarregue.'),true);}});
   window.addEventListener('beforeunload',event=>{if(state.unsafe){event.preventDefault();event.returnValue='';}});
   window.addEventListener('pagehide',()=>{controller.dispose();themeToggle.dispose();transition.dispose();});
   window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();});

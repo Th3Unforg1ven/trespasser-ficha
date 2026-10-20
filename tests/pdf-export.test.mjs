@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { PDFDocument, PDFTextField, PDFName } from '../dist/vendor/pdf-lib.js';
 import { createCharacter } from '../dist/model.js';
 import { createPdfExport } from '../dist/pdf-export.js';
+import { portraitPng } from './portrait-fixture.mjs';
 
 const template = () => readFile(new URL('../dist/assets/trespasser-template.pdf', import.meta.url));
 const text = (form, name) => form.getTextField(name).getText() ?? '';
@@ -181,4 +182,23 @@ test('long notes and extra deeds/inventory stay complete in editable appendix fi
   field.setText('Continuação revisada: João e Conceição.');
   const reopened = await PDFDocument.load(await pdf.save());
   assert.equal(text(reopened.getForm(), field.getName()), 'Continuação revisada: João e Conceição.');
+});
+
+test('portrait PDF appends the framed image and preserves canonical editable identity and condition values', async () => {
+  const c=realisticCharacter();
+  c.portrait={dataUrl:portraitPng(),zoom:1.5,x:15,y:80};
+  c.plightSelections=['distracted','sluggish']; c.plights='Texto legado';
+  const original=JSON.stringify(c);
+  const pdf=await exportDocument(c),form=pdf.getForm();
+  assert.equal(pdf.getPageCount(),5);
+  assert.equal(form.getFields().length,215);
+  assert.equal(form.getTextField('identity_name').acroField.getWidgets().length,5);
+  assert.equal(text(form,'plights'),'Distraído / Distracted; Letárgico / Sluggish\nTexto legado');
+  const portrait=pdf.getPages()[4];
+  assert.ok(portrait.node.Resources().lookup(PDFName.of('XObject')).keys().length>0,'image is embedded rather than an external URL');
+  form.getTextField('identity_name').setText('Retrato revisado');
+  const reopened=await PDFDocument.load(await pdf.save());
+  assert.equal(text(reopened.getForm(),'identity_name'),'Retrato revisado');
+  assert.ok(reopened.getForm().getFields().every(field=>!field.isReadOnly()));
+  assert.equal(JSON.stringify(c),original);
 });

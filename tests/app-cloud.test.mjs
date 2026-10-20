@@ -8,6 +8,10 @@ import { acquireAccountLock } from '../dist/account-lock.js';
 import { icon, setButtonLabel, mountButtonIcons } from '../dist/icons.js';
 import { setupTheme } from '../dist/preferences.js';
 import { setupThemeToggle } from '../dist/ui-shell.js';
+import { setupLanguage, getLanguage, t, languageSettingsMarkup, translateStatic, setLanguagePreference } from '../dist/i18n.js';
+import { ui, bilingual, label as localLabel, formatError } from '../dist/i18n-character.js';
+import { importPortrait, portraitStyle } from '../dist/portrait.js';
+import { portraitPng } from './portrait-fixture.mjs';
 
 const KEY='trespasser.record.v1';
 const appSource=(await readFile(new URL('../dist/app.js',import.meta.url),'utf8')).replace(/^import .*;\r?\n/gm,'');
@@ -46,7 +50,7 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
     querySelector:selector=>elements.get(selector)||null,
     querySelectorAll:selector=>selector.startsWith('#export-button')?[elements.get('#export-button')]:[],
     createElement:()=>{const element=new Element();element.ownerDocument=document;return element;},createTextNode:text=>({textContent:text}),
-    addEventListener:(event,listener)=>documentListeners.set(event,listener)};
+    addEventListener(event,listener){const prior=documentListeners.get(event);documentListeners.set(event,prior?value=>{prior(value);listener(value);}:listener);}};
   for(const element of elements.values())element.ownerDocument=document;
   let nextTimer=0,authListener,resolveSession,resolveLogout,authUser=initialUser,inCallback=false;
   const timers=new Map(),intervals=new Map(),calls=[],events=[];
@@ -66,18 +70,131 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
     async save(sent){assert.equal(inCallback,false);calls.push({type:'save',user:authUser});const rows=remote.get(authUser)||[];const old=rows.find(r=>r.id===sent.id);if((old?.revision||0)!==sent.revision)return null;const row={id:sent.id,data:structuredClone(sent.data),revision:sent.revision+1,deleted_at:sent.deleted?'2026-10-19T12:00:00Z':null};remote.set(authUser,[...rows.filter(r=>r.id!==row.id),row]);return row;}
   };
   const window={localStorage,addEventListener(event,listener){const prior=windowListeners.get(event);windowListeners.set(event,prior?value=>{prior(value);listener(value);}:listener);},dispatchEvent:event=>{events.push(event);windowListeners.get(event.type)?.(event);}};
-  const dependencies={...model,...uiState,CloudSync,acquireAccountLock,icon,setButtonLabel,mountButtonIcons,setupTheme,setupThemeToggle,createCloudClient:()=>({auth,adapter}),cloudConfig:{},navigator:{locks},
+  const dependencies={...model,...uiState,CloudSync,acquireAccountLock,icon,setButtonLabel,mountButtonIcons,setupTheme,setupThemeToggle,setupLanguage,getLanguage,t,languageSettingsMarkup,translateStatic,ui,bilingual,localLabel,formatError,importPortrait,portraitStyle,createCloudClient:()=>({auth,adapter}),cloudConfig:{},navigator:{locks,language:'pt-BR'},
     preparePrint(){},prepareExport(){throw new Error('Export is outside this auth test');},
     document,window,localStorage,location:{href:'https://example.test/trespasser-ficha/?ignored=1#ignored',reload(){calls.push({type:'reload'});}},
     setTimeout:(fn,delay)=>{const id=++nextTimer;timers.set(id,{fn,delay});return id;},clearTimeout:id=>timers.delete(id),
     setInterval:(fn,delay)=>{const id=++nextTimer;intervals.set(id,{fn,delay});return id;},clearInterval:id=>intervals.delete(id)};
-  const run=new Function(...Object.keys(dependencies),appSource+'\nreturn {getState:()=>({records,activeId,cloudUser,cloudReady,cloudStatus}),attachSession,save,syncCloud,logoutCloud,loginCloud,migrateLocalCharacters};');
+  const run=new Function(...Object.keys(dependencies),appSource+'\nreturn {getState:()=>({records,activeId,tab,cloudUser,cloudReady,cloudStatus,portraitDraft}),attachSession,save,syncCloud,logoutCloud,loginCloud,migrateLocalCharacters,showPortraitEditor};');
   const app=run(...Object.values(dependencies));
   const runTimers=async(delay=0)=>{for(const[id,timer]of[...timers])if(timer.delay===delay){timers.delete(id);timer.fn();}await flush();};
   function edit(path,value){const target={dataset:{field:path},value,type:'text',matches:selector=>selector==='[data-field]'};documentListeners.get('input')({target});}
-  return{app,storage,localStorage,writes,elements,auth,adapter,calls,events,emit,runTimers,edit,remote,locks,windowListeners,document,clickAction:(action,extra={})=>documentListeners.get('click')({target:{closest:()=>({dataset:{action,...extra}})}}),setQuotaFailure:value=>{quotaFailure=value;},
+  return{app,storage,localStorage,writes,elements,auth,adapter,calls,events,emit,runTimers,edit,remote,locks,windowListeners,document,clickAction:(action,extra={})=>documentListeners.get('click')({target:{closest:selector=>selector==='button'?({dataset:{action,...extra}}):null}}),setQuotaFailure:value=>{quotaFailure=value;},
+    change:target=>documentListeners.get('change')({target}),
     resolveSession:id=>resolveSession({data:{session:session(id)},error:null}),resolveLogout:()=>resolveLogout()};
 }
+
+test('changing interface language preserves the active sheet, section, cloud gates, and stored data',async()=>{
+  const character=model.createCharacter('Combate');character.notes='Inventário';
+  const f=fixture({guest:character});await flush();
+  f.clickAction('',{tab:'equipment'});
+  f.clickAction('settings');
+  const before=structuredClone(f.app.getState()),archiveWrites=f.writes.filter(([key])=>key===KEY).length;
+  setLanguagePreference('en');
+  assert.equal(f.elements.get('#section-title').textContent,'Equipment');
+  assert.match(f.elements.get('#navigation').innerHTML,/>Character</);
+  assert.doesNotMatch(f.elements.get('#navigation').innerHTML,/>Personagem</);
+  assert.match(f.elements.get('#identity').innerHTML,/value="Combate"/);
+  assert.equal(f.elements.get('#dialog-title').textContent,'Settings');
+  assert.match(f.elements.get('#dialog-content').innerHTML,/Interface language/);
+  assert.equal(JSON.stringify(f.app.getState().records),JSON.stringify(before.records));
+  assert.equal(f.app.getState().activeId,before.activeId);
+  assert.equal(f.app.getState().tab,'equipment');
+  assert.equal(f.writes.filter(([key])=>key===KEY).length,archiveWrites,'language changes do not save or migrate character data');
+  setLanguagePreference('pt');
+  assert.equal(f.elements.get('#section-title').textContent,'Equipamento');
+  assert.equal(f.elements.get('#dialog-title').textContent,'Configurações');
+
+  const blocked=fixture({initialUser:'account-a',locks:undefined});await flush();
+  // While account verification is pending, a language rerender must keep its guard.
+  blocked.elements.get('#main').inert=true;
+  setLanguagePreference('en');
+  assert.equal(blocked.elements.get('#main').inert,true);
+  setLanguagePreference('pt');
+});
+
+test('portrait adjustments remain a draft until saved and are discarded when the account changes',async()=>{
+  const f=fixture();await flush();
+  const draft={dataUrl:portraitPng(),zoom:1.5,x:30,y:60};
+  f.app.showPortraitEditor(draft);
+  assert.equal(f.app.getState().records[0].portrait.dataUrl,'');
+  assert.match(f.elements.get('#dialog-content').innerHTML,/data-portrait-crop="zoom"/);
+  f.clickAction('portrait-cancel');
+  assert.equal(f.app.getState().portraitDraft,null);
+  assert.equal(f.app.getState().records[0].portrait.dataUrl,'');
+  f.app.showPortraitEditor(draft);f.clickAction('portrait-save');
+  assert.deepEqual(f.app.getState().records[0].portrait,draft);
+  f.app.showPortraitEditor({...draft,zoom:2});
+  f.emit('new-account');await f.runTimers();
+  f.clickAction('portrait-save');
+  assert.equal(f.app.getState().records[0].portrait.dataUrl,'','an old account portrait cannot be written into a new account');
+  assert.equal(f.app.getState().portraitDraft,null);
+});
+
+test('a delayed character JSON import cannot write into the next signed-in account or guest archive',async()=>{
+  for(const destination of ['account-b',null]){
+    const f=fixture({initialUser:'account-a'});await flush();
+    const guestArchive=f.storage.get(KEY);
+    let finishRead;
+    const file={size:100,text:()=>new Promise(resolve=>{finishRead=resolve;})};
+    const importing=f.elements.get('#import-file').listeners.get('change')({target:{files:[file]}});
+    f.emit(destination);await f.runTimers();
+    const before=JSON.stringify(f.app.getState().records),writes=f.writes.length;
+    finishRead(JSON.stringify({format:'trespasser-character',version:1,character:{name:'Importação da conta anterior'}}));
+    await importing;await flush();
+    assert.equal(JSON.stringify(f.app.getState().records),before);
+    assert.equal(f.writes.length,writes);
+    assert.equal(f.storage.get(KEY),guestArchive);
+    assert.equal(f.calls.some(call=>call.type==='save'),false);
+    assert.match(f.elements.get('#toast').textContent,/A conta mudou durante a importação/);
+  }
+});
+
+test('character JSON import preserves legacy records and cannot start in an unready account',async()=>{
+  const f=fixture();await flush();
+  await f.elements.get('#import-file').listeners.get('change')({target:{files:[{size:100,text:async()=>JSON.stringify({
+    format:'trespasser-character',version:1,character:{name:'Ficha antiga',plights:'Aflição personalizada',resources:{hp:3}},
+  })}]}});
+  const imported=f.app.getState().records.at(-1);
+  assert.equal(imported.name,'Ficha antiga');assert.equal(imported.plights,'Aflição personalizada');
+  assert.equal(imported.resources.hp,3);
+  assert.deepEqual(imported.portrait,{dataUrl:'',zoom:1,x:50,y:50});
+  assert.deepEqual(imported.plightSelections,[]);
+  const blocked=fixture({initialUser:'account-a',locks:null});await flush();
+  let read=false;
+  await blocked.elements.get('#import-file').listeners.get('change')({target:{files:[{size:100,text:async()=>{read=true;return '{}';}}]}});
+  assert.equal(read,false);
+  assert.equal(blocked.calls.some(call=>call.type==='save'),false);
+});
+
+test('invalid character imports report the model diagnostic in the current interface language',async()=>{
+  const f=fixture();await flush();setLanguagePreference('en');
+  const before=JSON.stringify(f.app.getState().records);
+  await f.elements.get('#import-file').listeners.get('change')({target:{files:[{size:100,text:async()=>JSON.stringify({
+    format:'trespasser-character',version:1,character:{name:'Uma pessoa chamada Nível',level:99},
+  })}]}});
+  assert.equal(f.elements.get('#toast').textContent,'Could not import: Level: invalid number.');
+  assert.equal(JSON.stringify(f.app.getState().records),before);
+  setLanguagePreference('pt');
+});
+
+test('book plight choices persist separately and preserve legacy notes in both languages',async()=>{
+  const character=model.createCharacter('Guardião');character.plights='Condição específica da mesa';
+  const f=fixture({guest:character});await flush();
+  assert.equal((f.elements.get('#sheet-content').innerHTML.match(/data-plight=/g)||[]).length,10);
+  assert.match(f.elements.get('#sheet-content').innerHTML,/Condição específica da mesa/);
+  f.change({dataset:{plight:'afraid'},checked:true,closest:()=>null});
+  assert.deepEqual(f.app.getState().records[0].plightSelections,['afraid']);
+  assert.equal(f.app.getState().records[0].plights,'Condição específica da mesa');
+  setLanguagePreference('en');
+  assert.match(f.elements.get('#sheet-content').innerHTML,/data-plight="afraid" checked/);
+  assert.match(f.elements.get('#sheet-content').innerHTML,/>Afraid</);
+  assert.match(f.elements.get('#sheet-content').innerHTML,/Previous notes/);
+  f.change({dataset:{plight:'afraid'},checked:false,closest:()=>null});
+  assert.deepEqual(f.app.getState().records[0].plightSelections,[]);
+  assert.equal(f.app.getState().records[0].plights,'Condição específica da mesa');
+  setLanguagePreference('pt');
+});
 
 test('a late signout response cannot replace a newer connected account',async()=>{
   const c=model.createCharacter('Ficha da conta B');
@@ -181,6 +298,11 @@ test('Começar explicitly opens the Google account dialog, and sign-in closes it
   assert.equal(f.elements.get('#dialog-title').textContent,'Entrar ou criar conta');
   assert.match(f.elements.get('#dialog-content').innerHTML,/Continuar com Google/);
   assert.doesNotMatch(f.elements.get('#dialog-content').innerHTML,/Aparência|data-theme-value/);
+  setLanguagePreference('en');
+  assert.equal(f.elements.get('#dialog-title').textContent,'Sign in or create an account');
+  assert.match(f.elements.get('#dialog-content').innerHTML,/Continue with Google/);
+  setLanguagePreference('pt');
+  assert.equal(f.elements.get('#dialog-title').textContent,'Entrar ou criar conta');
   assert.equal(f.calls.some(call=>call.type==='login'),false);
   f.clickAction('cloud-login');await flush();
   assert.equal(f.calls.find(call=>call.type==='login').options.provider,'google');

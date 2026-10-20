@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CloudSync } from '../dist/cloud-sync.js';
 import { createCharacter } from '../dist/model.js';
+import { portraitPng } from './portrait-fixture.mjs';
 
 const clone = value => JSON.parse(JSON.stringify(value));
 const character = (id = 'hero', name = 'João') => ({ ...createCharacter(name), id });
@@ -63,6 +64,34 @@ test('new records upload with insert CAS and account cache is preferred on reloa
   assert.deepEqual(second.engine.getSnapshot().records.map(record => record.id), ['hero']);
   assert.equal(backend.rows.has('ignored'), false);
   assert.equal(second.statuses.at(-1).state, 'synced');
+});
+
+test('private portrait and framing persist through character upload, account cache and second-device reload', async () => {
+  const c=character(); c.portrait={dataUrl:portraitPng(),zoom:1.7,x:10,y:90}; c.plightSelections=['afraid'];
+  const backend=server(),first=client(backend);
+  await first.engine.start({records:[c],activeId:c.id});
+  assert.deepEqual(backend.rows.get(c.id).data.portrait,c.portrait);
+  first.engine.stop();
+  const cached=client(backend,{storage:first.storage}),otherDevice=client(backend);
+  await Promise.all([cached.engine.start(),otherDevice.engine.start()]);
+  assert.deepEqual(cached.engine.getSnapshot().records[0].portrait,c.portrait);
+  assert.deepEqual(otherDevice.engine.getSnapshot().records[0].portrait,c.portrait);
+  assert.deepEqual(otherDevice.engine.getSnapshot().records[0].plightSelections,['afraid']);
+  cached.engine.stop();otherDevice.engine.stop();
+});
+
+test('simultaneous replacement and old-image crop preserve both complete portraits as a conflict copy', async () => {
+  const c=character();c.portrait={dataUrl:portraitPng(60,40),zoom:1,x:50,y:50};
+  const backend=server([c]),a=client(backend,{prefix:'a'}),b=client(backend,{prefix:'b'});
+  await Promise.all([a.engine.start(),b.engine.start()]);
+  const replacement={dataUrl:portraitPng(50,40),zoom:1,x:50,y:50};
+  const crop={...c.portrait,zoom:2,x:10};
+  edit(a.engine,records=>{records[0].portrait=replacement;});await a.engine.sync();
+  edit(b.engine,records=>{records[0].portrait=crop;});await b.engine.sync();
+  assert.deepEqual(backend.rows.get('hero').data.portrait,replacement);
+  assert.deepEqual(backend.rows.get('b-1').data.portrait,crop);
+  assert.deepEqual(b.conflicts[0].paths,['portrait']);
+  a.engine.stop();b.engine.stop();
 });
 
 test('two devices combine disjoint edits and recover a CAS race without overwriting', async () => {

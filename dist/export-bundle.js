@@ -1,11 +1,11 @@
-import { buildExportData, fileStem } from './export-data.js';
+import { buildExportData, fileStem } from './export-data.js?v=records-2';
 
 export async function prepareExport(input, options = {}) {
   const { character } = buildExportData(input);
   const stem = fileStem(character);
   const json = JSON.stringify({format:'trespasser-character',version:1,rules:'2.1.3',character},null,2);
   const [{createPdfExport}] = await Promise.all([
-    import('./pdf-export.js'),
+    import('./pdf-export.js?v=records-2'),
     import('./vendor/jszip.js'),
   ]);
   const pdf = await createPdfExport(character, options);

@@ -1,6 +1,6 @@
 import {PDFDocument,PDFName,PDFHexString,StandardFonts,defaultTextFieldAppearanceProvider,rgb} from './vendor/pdf-lib.js';
 import {normalizeHaven,deriveHaven,HAVEN_ATTRS,HAVEN_SKILLS,HIRELING_TYPES} from './haven-model.js';
-import {fileStem} from './export-data.js';
+import {fileStem} from './export-data.js?v=records-2';
 
 let templatePromise;
 async function template(){

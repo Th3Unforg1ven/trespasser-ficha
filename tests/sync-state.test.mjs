@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCharacter } from '../dist/model.js';
 import { characterFingerprint, mergeCharacter, normalizeSyncCharacter, normalizeSyncRecord, recordFingerprint, mergeRecord, MAX_SYNC_BYTES, isSyncCharacterId } from '../dist/sync-state.js';
+import { portraitPng } from './portrait-fixture.mjs';
 
 const copy = value => structuredClone(value);
 const fixture = () => ({ ...createCharacter('João'), id: 'shared-character' });
@@ -204,4 +205,43 @@ test('generic normalization isolates mutating callbacks and rejects unstable or 
   assert.throws(() => normalizeSyncRecord(source, value => ({ ...value, id: 'different' })), /identificador/);
   assert.throws(() => normalizeSyncRecord(source, () => JSON.parse('{"id":"haven","constructor":true}')), /inválido/);
   assert.throws(() => normalizeSyncRecord({ name: 'No ID' }, value => ({ ...value, id: 'generated' })), /identificador/);
+});
+
+test('only character root portraits get a validated image exception to the ordinary string budget', () => {
+  const c=createCharacter('Privado'); c.portrait={dataUrl:portraitPng(),zoom:1.5,x:5,y:80};
+  assert.ok(c.portrait.dataUrl.length>50_000);
+  assert.deepEqual(normalizeSyncCharacter(c).portrait,c.portrait);
+  assert.ok(characterFingerprint(c).includes(c.portrait.dataUrl));
+  const changed=copy(c);changed.portrait.zoom=2;
+  assert.notEqual(characterFingerprint(c),characterFingerprint(changed));
+  assert.deepEqual(mergeCharacter(c,changed,c).character.portrait,changed.portrait);
+  assert.throws(()=>normalizeSyncRecord({...c,kind:'haven'},value=>value),/Texto grande demais/);
+  assert.throws(()=>normalizeSyncCharacter({...c,notes:c.portrait.dataUrl}),/Texto grande demais/);
+  assert.throws(()=>normalizeSyncCharacter({...c,portrait:{dataUrl:'x'.repeat(60_000)}}),/Retrato inválido/);
+  assert.throws(()=>normalizeSyncCharacter({...c,extra:{portrait:c.portrait}}),/Texto grande demais/);
+  assert.throws(()=>normalizeSyncCharacter({...c,'portrait.dataUrl':c.portrait.dataUrl}),/Texto grande demais/);
+});
+
+test('a character portrait is an atomic image/crop so simultaneous replacements never invent a new framing', () => {
+  const base=createCharacter('Enquadramento');
+  base.portrait={dataUrl:portraitPng(60,40),zoom:1,x:50,y:50};
+  const local=copy(base),remote=copy(base);
+  local.portrait={dataUrl:portraitPng(50,40),zoom:1,x:50,y:50};
+  remote.portrait={...base.portrait,zoom:2,x:10};
+  const before=[base,local,remote].map(value=>JSON.stringify(value));
+  const result=mergeCharacter(base,local,remote);
+  assert.deepEqual(result.conflicts,['portrait']);
+  assert.deepEqual(result.character.portrait,local.portrait);
+  assert.deepEqual([base,local,remote].map(value=>JSON.stringify(value)),before);
+  assert.deepEqual(mergeCharacter(base,base,remote).character.portrait,remote.portrait,'one-sided crop applies');
+  assert.deepEqual(mergeCharacter(base,local,local).conflicts,[],'matching changes do not conflict');
+
+  // Other record models retain ordinary object merging even when their own
+  // unrelated data happens to have the same property name.
+  const genericBase={id:'other',portrait:{image:'a',zoom:1}};
+  const genericLocal={id:'other',portrait:{image:'b',zoom:1}};
+  const genericRemote={id:'other',portrait:{image:'a',zoom:2}};
+  const generic=mergeRecord(genericBase,genericLocal,genericRemote,value=>structuredClone(value));
+  assert.deepEqual(generic.conflicts,[]);
+  assert.deepEqual(generic.record.portrait,{image:'b',zoom:2});
 });

@@ -44,6 +44,9 @@ export function icon(name, cls = '') {
 export function setButtonLabel(button, text, name = button?.dataset?.icon) {
   if (!button) return;
   const doc = button.ownerDocument || globalThis.document;
+  const previous = button.querySelector?.('.button-label');
+  const source = previous?.getAttribute?.('data-i18n');
+  const preserveSource = source !== undefined && source !== null && previous.textContent === String(text ?? '');
   const key = resolve(name);
   const symbol = doc.createElement('span');
   symbol.className = 'button-symbol';
@@ -52,6 +55,7 @@ export function setButtonLabel(button, text, name = button?.dataset?.icon) {
   const label = doc.createElement('span');
   label.className = 'button-label';
   label.textContent = String(text ?? '');
+  if (preserveSource) label.setAttribute('data-i18n', source);
   button.dataset.icon = key;
   button.replaceChildren(symbol, label);
 }

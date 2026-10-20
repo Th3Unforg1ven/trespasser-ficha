@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {setupTheme} from '../dist/preferences.js';
 import {setupThemeToggle,createPageTransition} from '../dist/ui-shell.js';
+import {setupLanguage} from '../dist/i18n.js';
 
 // A small browser contract fixture: real DOM-style attributes, parent traversal,
 // delegated events, inert focus guards and a controllable clock, without a new
@@ -113,6 +114,22 @@ test('existing page markup is adapted safely and hidden source focus moves to th
   assert.equal(createPageTransition({document:f.doc,window:f.win}),transition);assert.equal(f.doc.querySelectorAll('#page-transition').length,1);
   const done=transition.start({label:'<img src=x onerror=bad>'});assert.equal(f.doc.querySelector('#page-transition-label').textContent,'<img src=x onerror=bad>');assert.equal(existing.querySelector('.page-transition-card').className.includes('page-transition-panel'),true);
   f.button.hidden=true;done();assert.equal(f.doc.activeElement,f.main);transition.dispose();
+});
+
+test('changing interface language updates theme descriptions and an active transition without touching records',()=>{
+  const f=fixture(),language=setupLanguage({document:f.doc,window:f.win,navigator:{language:'pt-BR'}});
+  const theme=setupTheme({document:f.doc,window:f.win}),shell=setupThemeToggle({document:f.doc,window:f.win,theme});
+  const transition=createPageTransition({document:f.doc,window:f.win});
+  transition.start({label:'Abrindo personagens…'});
+  language.setPreference('en');
+  assert.ok(f.toggles.every(toggle=>toggle.getAttribute('aria-label')==='Switch to dark mode'));
+  assert.equal(f.doc.querySelector('[data-transition-label]').textContent,'Opening characters…');
+  assert.equal(f.storage.get('trespasser.record.v1'),'unchanged character data');
+  assert.equal(theme.getPreference(),'system');
+  language.setPreference('pt');
+  assert.equal(f.doc.querySelector('[data-transition-label]').textContent,'Abrindo personagens…');
+  assert.ok(f.toggles.every(toggle=>toggle.getAttribute('title')==='Ativar modo escuro'));
+  transition.dispose();shell.dispose();language.dispose();
 });
 
 test('shared CSS hides transition in print, respects reduced motion and keeps the white logo visible on both themes',async()=>{

@@ -1,10 +1,14 @@
-import { normalizeCharacter } from './model.js';
+import { normalizeCharacter } from './model.js?v=records-2';
+import { normalizePortrait, MAX_PORTRAIT_DATA_URL } from './portrait.js';
 
 // Sync snapshots contain only JSON. Keep identity stable: the character model's
 // random ID fallbacks are useful for imports, but unsafe for comparing revisions.
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 const MISSING = Symbol('missing');
 export const MAX_SYNC_BYTES = 2_000_000;
+// Explicit capability for character normalizers; other models keep every
+// string at 50k, including a Haven containing an unexpected portrait property.
+export const CHARACTER_PORTRAIT_RECORD = Symbol.for('trespasser.characterPortraitRecord');
 
 // Match the database's root-id byte limit; nested inventory/deed ids are JSON
 // values and do not occupy the character primary key.
@@ -19,12 +23,15 @@ function isObject(value) {
   return prototype === Object.prototype || prototype === null;
 }
 
-function inspectJson(value, budget = { nodes: 0 }, depth = 0) {
+function inspectJson(value, budget = { nodes: 0 }, depth = 0, path = [], allowPortrait = false) {
   if (++budget.nodes > 30_000 || depth > 32) throw new Error('Ficha grande ou complexa demais para sincronizar.');
   if (value === null || typeof value === 'boolean') return;
   if (typeof value === 'number' && Number.isFinite(value)) return;
   if (typeof value === 'string') {
-    if (value.length > 50_000) throw new Error('Texto grande demais para sincronizar.');
+    if (value.length > 50_000) {
+      if (!allowPortrait || path.length !== 2 || path[0] !== 'portrait' || path[1] !== 'dataUrl' || value.length > MAX_PORTRAIT_DATA_URL) throw new Error('Texto grande demais para sincronizar.');
+      normalizePortrait({ dataUrl: value });
+    }
     return;
   }
   if (!Array.isArray(value) && !isObject(value)) throw new Error('A ficha deve conter apenas dados JSON.');
@@ -36,7 +43,7 @@ function inspectJson(value, budget = { nodes: 0 }, depth = 0) {
     if (Array.isArray(value) && (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= value.length)) throw new Error('A ficha deve conter apenas dados JSON.');
     if (FORBIDDEN_KEYS.has(key)) throw new Error('Campo de ficha inválido.');
     if (!descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) throw new Error('A ficha deve conter apenas dados JSON.');
-    inspectJson(descriptor.value, budget, depth + 1);
+    inspectJson(descriptor.value, budget, depth + 1, [...path, key], allowPortrait);
   }
   if (Array.isArray(value) && entries.length !== value.length + 1) throw new Error('A ficha não pode conter listas com posições ausentes.');
 }
@@ -47,13 +54,14 @@ function requireId(value, label) {
 
 /** Shared JSON/identity limits; the supplied model owns its domain validation. */
 export function normalizeSyncRecord(input, normalizeRecord) {
-  inspectJson(input);
+  const allowPortrait = normalizeRecord?.[CHARACTER_PORTRAIT_RECORD] === true;
+  inspectJson(input, undefined, 0, [], allowPortrait);
   if (!isObject(input)) throw new Error('Ficha inválida.');
   requireId(input.id, 'Ficha');
   if (!isSyncCharacterId(input.id)) throw new Error('Ficha: identificador inválido; use até 200 bytes, sem espaços nas pontas.');
   if (typeof normalizeRecord !== 'function') throw new Error('Normalizador de ficha inválido.');
   const record = normalizeRecord(clone(input));
-  inspectJson(record);
+  inspectJson(record, undefined, 0, [], allowPortrait);
   if (!isObject(record) || record.id !== input.id) throw new Error('O normalizador não pode alterar o identificador da ficha.');
   if (record.name !== undefined && typeof record.name !== 'string') throw new Error('Nome de ficha inválido.');
   if (new TextEncoder().encode(JSON.stringify(record)).byteLength > MAX_SYNC_BYTES) throw new Error('Ficha grande demais para sincronizar.');
@@ -62,13 +70,16 @@ export function normalizeSyncRecord(input, normalizeRecord) {
 
 /** A new validated character snapshot; never mutates its source. */
 export function normalizeSyncCharacter(input) {
-  return normalizeSyncRecord(input, data => {
+  const normalize = data => {
     for (const key of ['inventory', 'deeds']) {
       if (Array.isArray(data[key])) for (const item of data[key]) requireId(item?.id, key);
     }
     return normalizeCharacter(data);
-  });
+  };
+  normalize[CHARACTER_PORTRAIT_RECORD] = true;
+  return normalizeSyncRecord(input, normalize);
 }
+normalizeSyncCharacter[CHARACTER_PORTRAIT_RECORD] = true;
 
 function canonical(value) {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
@@ -98,10 +109,16 @@ function clone(value) {
   return value;
 }
 
-function mergeValue(base, local, remote, path, conflicts) {
+function mergeValue(base, local, remote, path, conflicts, atomicPortrait = false) {
   if (equal(local, remote)) return clone(local);
   if (equal(local, base)) return clone(remote);
   if (equal(remote, base)) return clone(local);
+  // The crop belongs to this exact image. Combining one device's replacement
+  // image with another device's framing would invent a portrait neither saved.
+  if (atomicPortrait && path === 'portrait') {
+    conflicts.push(path);
+    return clone(local);
+  }
   if (isObject(local) && isObject(remote) && (base === MISSING || isObject(base))) {
     const merged = {};
     const keys = new Set([...Object.keys(base === MISSING ? {} : base), ...Object.keys(local), ...Object.keys(remote)]);
@@ -112,6 +129,7 @@ function mergeValue(base, local, remote, path, conflicts) {
         Object.hasOwn(remote, key) ? remote[key] : MISSING,
         path ? `${path}.${key}` : key,
         conflicts,
+        atomicPortrait,
       );
       if (value !== MISSING) merged[key] = value;
     }
@@ -139,6 +157,6 @@ export function mergeRecord(base, local, remote, normalizeRecord = normalizeSync
   const snapshots = [base, local, remote].map(value => normalizeSyncRecord(value, normalizeRecord));
   if (new Set(snapshots.map(character => character.id)).size !== 1) throw new Error('Não é possível mesclar fichas diferentes.');
   const conflicts = [];
-  const merged = mergeValue(...snapshots, '', conflicts);
+  const merged = mergeValue(...snapshots, '', conflicts, normalizeRecord?.[CHARACTER_PORTRAIT_RECORD] === true);
   return { record: normalizeSyncRecord(merged, normalizeRecord), conflicts };
 }

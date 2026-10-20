@@ -1,8 +1,9 @@
 import {
   PDFDocument, PDFName, PDFTextField, PDFCheckBox, StandardFonts,
-  defaultTextFieldAppearanceProvider, rgb,
+  defaultTextFieldAppearanceProvider, rgb, pushGraphicsState, rectangle, clip, endPath, popGraphicsState,
 } from './vendor/pdf-lib.js';
-import { buildExportData, STANDARD_STATES } from './export-data.js';
+import { buildExportData, STANDARD_STATES } from './export-data.js?v=records-2';
+import { portraitImageInfo, portraitGeometry } from './portrait.js';
 
 let templatePromise;
 async function template() {
@@ -142,6 +143,40 @@ function appendPages(doc, form, font, bold, entries) {
   return pageNumbers;
 }
 
+async function appendPortrait(doc, form, font, bold, character) {
+  if (!character.portrait.dataUrl) return;
+  const info = portraitImageInfo(character.portrait.dataUrl);
+  const image = info.mime === 'image/png' ? await doc.embedPng(info.bytes) : await doc.embedJpg(info.bytes);
+  const width = 595.276, height = 841.89;
+  const page = doc.addPage([width, height]);
+  page.drawRectangle({ x:20, y:20, width:width-40, height:height-40, borderWidth:2.5,
+    borderColor:rgb(.08,.08,.08), color:rgb(.98,.98,.98) });
+  page.drawText('TRESPASSER', {x:32,y:height-47,font:bold,size:15});
+  page.drawText('RETRATO / PORTRAIT', {x:32,y:height-67,font:bold,size:10});
+  page.drawLine({start:{x:21,y:height-80},end:{x:width-21,y:height-80},thickness:2});
+  const frame = { x:157.638, y:340, width:280, height:350 };
+  const geometry = portraitGeometry(character.portrait, image.width, image.height, frame.width, frame.height);
+  page.drawRectangle({...frame, color:rgb(1,1,1)});
+  page.pushOperators(pushGraphicsState(), rectangle(frame.x, frame.y, frame.width, frame.height), clip(), endPath());
+  page.drawImage(image, {x:frame.x+geometry.x, y:frame.y+frame.height-geometry.height-geometry.y,
+    width:geometry.width, height:geometry.height});
+  page.pushOperators(popGraphicsState());
+  page.drawRectangle({...frame, borderWidth:1.5,borderColor:rgb(.08,.08,.08)});
+  // Shared identity fields stay canonical and editable on this page too.
+  for (const [name, label, y, fieldHeight] of [
+    ['identity_name','NOME / NAME',272,28], ['identity_player','JOGADOR / PLAYER',207,28],
+    ['identity_motto','LEMA / MOTTO',104,65],
+  ]) {
+    page.drawText(label,{x:64,y:y+fieldHeight+7,font:bold,size:8});
+    const field = form.getTextField(name);
+    field.addToPage(page,{x:64,y,width:467,height:fieldHeight,font,borderWidth:.6,
+      borderColor:rgb(.25,.25,.25),backgroundColor:rgb(1,1,1),textColor:rgb(0,0,0)});
+    const text = displayText(field.getText() || '',font), fit = fitText(field,text,font);
+    appearance(field,font,fit.display,fit.size);
+  }
+  page.drawText('FAN MADE - CAMPOS PREENCHÍVEIS / FILLABLE FIELDS', {x:30,y:29,font,size:6});
+}
+
 export async function createPdfExport(input, { templateBytes } = {}) {
   const data = buildExportData(input);
   const doc = await PDFDocument.load(templateBytes ?? await template());
@@ -181,6 +216,7 @@ export async function createPdfExport(input, { templateBytes } = {}) {
   for (const [key, value] of Object.entries(data.character.states)) {
     if (!STANDARD_STATES.includes(key)) continuations.push({key:`state_${key}`,title:'Estado adicional / Additional state',text:`${key}: ${value}`});
   }
+  await appendPortrait(doc, form, font, bold, data.character);
   const pageNumbers = appendPages(doc, form, font, bold, continuations);
   if (doc.getPageCount() > 4) {
     doc.getPages().forEach((page, index) => {

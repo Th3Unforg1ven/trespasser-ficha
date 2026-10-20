@@ -1,6 +1,6 @@
 # Trespasser · Ficha de personagem
 
-Ficha editável não oficial para Trespasser v2.1.3, em português com os termos originais em inglês. Implementação em HTML, CSS e JavaScript, com bibliotecas incluídas localmente e sem dependências de instalação.
+Ficha editável fan-made para Trespasser v2.1.3, em português com termos originais ou em inglês. Implementação em HTML, CSS e JavaScript, com bibliotecas incluídas localmente e sem dependências de instalação. Projeto de [Th3Unforg1ven](https://github.com/Th3Unforg1ven).
 
 ## Acessar online
 
@@ -12,13 +12,21 @@ O ícone no canto superior alterna diretamente entre modo claro e escuro na aber
 
 Uma breve tela de carregamento acompanha a abertura dos registros. Personagens só são exibidos depois de verificar a sessão e preparar os dados; refúgios também aguardam sua verificação inicial. A transição preserva o foco, respeita movimento reduzido e não mantém a interface bloqueada indefinidamente se a conexão falhar.
 
+**Idioma** em Configurações oferece **Automático (dispositivo)**, **Português** e **English**. Automático usa português quando o idioma principal do navegador é `pt` ou `pt-*`, e inglês nos demais casos. A preferência é independente por navegador e segue as telas inicial, de personagens e de refúgios. Trocar o idioma altera a interface, sem traduzir nomes, anotações e outros textos digitados ou alterar dados das fichas.
+
+O cabeçalho da capa mantém somente a versão à direita; os controles ficam à esquerda e o rodapé credita o GitHub e identifica o projeto como fan-made. O botão **Refúgios** na barra do personagem abre o outro registro com a mesma transição de carregamento.
+
+O retrato do personagem tem importação PNG/JPEG/WebP, zoom e posição horizontal/vertical. O enquadramento é uma edição temporária até **Salvar retrato**. A imagem é convertida em uma cópia reduzida, de até 800 px, e armazenada dentro do JSON privado da ficha, acompanhando o salvamento online e a importação/exportação. O PDF mantém seus campos preenchíveis e inclui o retrato enquadrado em uma página própria. Não é criado um endereço público separado para a foto.
+
+**Aflições / Plights** apresenta as dez opções de *Common Plights*, na página 58 do Rulebook: Afraid, Angry, Befuddled, Clumsy, Conspicuous, Discouraged, Distracted, Enfeebled, Sickly e Sluggish. Os efeitos permanecem sob controle da mesa. Fichas anteriores preservam o texto livre em **Anotações anteriores**; nenhuma anotação é apagada ao adotar as seleções. JSON e PDF incluem as escolhas e o conteúdo legado.
+
 Depois de entrar, use **Salvar minhas fichas locais na conta** para enviar personagens que já estavam neste endereço. A cópia local é mantida. Fichas de outro endereço, como localhost, podem ser importadas por JSON uma vez.
 
 **Exportar** prepara um ZIP com PDF preenchível e JSON do mesmo personagem, com opções para baixar cada arquivo separadamente. Textos longos e feitos ou itens excedentes recebem páginas adicionais, também preenchíveis. Os cálculos exportados podem ser editados manualmente no PDF.
 
 ## Registro de Refúgios
 
-[Abrir os refúgios](https://th3unforg1ven.github.io/trespassercs/havens.html). A ficha de Haven inclui seis atributos, doze perícias, nível, grau de população, riqueza, despesas, chegadas e evento; construções e projetos com relógios; fortalezas, contratados, cadeias de produção, itens e anotações. As abas mantêm os títulos em português com os termos originais nos campos.
+[Abrir os refúgios](https://th3unforg1ven.github.io/trespassercs/havens.html). A ficha de Haven inclui seis atributos, doze perícias, nível, grau de população, riqueza, despesas, chegadas e evento; construções e projetos com relógios; fortalezas, contratados, cadeias de produção, itens e anotações. Os títulos e campos acompanham o idioma da interface; em português, preservam os termos originais.
 
 O salvamento de refúgios é automático e separado dos personagens, com cache privado por conta. O mesmo login abre os refúgios em outros dispositivos. Cópias locais anteriores permanecem preservadas; copiá-las para a conta exige uma ação explícita em Configurações. Exportar gera PDF preenchível e JSON; importar o JSON cria uma nova ficha.
 
