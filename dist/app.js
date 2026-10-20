@@ -114,6 +114,7 @@ function updateAccountControls(refreshDialog=false) {
   const button=$('#account-button');
   button.textContent=cloudUser?'Conta':'Entrar';
   button.title=cloudUser?'Gerenciar conta e sincronização':'Entrar para salvar suas fichas online';
+  window.dispatchEvent(new CustomEvent('trespasser:account',{detail:{signedIn:Boolean(cloudUser),ready:authReady}}));
   if (accountDialogActive && $('#utility-dialog').open) {
     if (refreshDialog) { $('#dialog-title').textContent=cloudUser?'Sua conta':'Salvar fichas online';$('#dialog-content').innerHTML=accountContent(); }
     else {

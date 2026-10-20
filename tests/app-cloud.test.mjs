@@ -58,7 +58,7 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
     async list(){assert.equal(inCallback,false,'loading the account inside the SDK callback can deadlock');calls.push({type:'list',user:authUser});return structuredClone(remote.get(authUser)||[]);},
     async save(sent){assert.equal(inCallback,false);calls.push({type:'save',user:authUser});const rows=remote.get(authUser)||[];const old=rows.find(r=>r.id===sent.id);if((old?.revision||0)!==sent.revision)return null;const row={id:sent.id,data:structuredClone(sent.data),revision:sent.revision+1,deleted_at:sent.deleted?'2026-10-19T12:00:00Z':null};remote.set(authUser,[...rows.filter(r=>r.id!==row.id),row]);return row;}
   };
-  const window={addEventListener:(event,listener)=>windowListeners.set(event,listener)};
+  const window={addEventListener:(event,listener)=>windowListeners.set(event,listener),dispatchEvent:event=>windowListeners.get(event.type)?.(event)};
   const dependencies={...model,...uiState,CloudSync,acquireAccountLock,createCloudClient:()=>({auth,adapter}),cloudConfig:{},navigator:{locks},
     preparePrint(){},prepareExport(){throw new Error('Export is outside this auth test');},
     document,window,localStorage,location:{href:'https://example.test/trespasser-ficha/?ignored=1#ignored',reload(){calls.push({type:'reload'});}},
