@@ -46,9 +46,20 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
   const writes=[];
   let quotaFailure=false;
   const localStorage={getItem:key=>storage.get(key)??null,setItem(key,value){if(quotaFailure)throw new Error('Quota exceeded');writes.push([key,value]);storage.set(key,value);}};
+  let portraitHtml='',portraitButtons=[];
+  function identityPortraitButtons() {
+    const markup=elements.get('#identity').innerHTML;
+    if(markup!==portraitHtml){
+      portraitHtml=markup;
+      portraitButtons=[...markup.matchAll(/<button\b([^>]*data-action="(portrait-(?:edit|remove))"[^>]*)>/g)].map(match=>{
+        const button=new Element();button.tagName='BUTTON';button.dataset.action=match[2];button.disabled=/\bdisabled\b/.test(match[1]);return button;
+      });
+    }
+    return portraitButtons;
+  }
   const document={hidden:false,activeElement:null,documentElement:{dataset:{},style:{}},
-    querySelector:selector=>elements.get(selector)||null,
-    querySelectorAll:selector=>selector.startsWith('#export-button')?[elements.get('#export-button')]:[],
+    querySelector:selector=>elements.get(selector)||identityPortraitButtons().find(button=>selector===`[data-action="${button.dataset.action}"]`)||null,
+    querySelectorAll:selector=>selector.startsWith('#export-button')?[elements.get('#export-button')]:selector.includes('[data-portrait-controls]')?identityPortraitButtons():[],
     createElement:()=>{const element=new Element();element.ownerDocument=document;return element;},createTextNode:text=>({textContent:text}),
     addEventListener(event,listener){const prior=documentListeners.get(event);documentListeners.set(event,prior?value=>{prior(value);listener(value);}:listener);}};
   for(const element of elements.values())element.ownerDocument=document;
@@ -83,6 +94,29 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
     change:target=>documentListeners.get('change')({target}),
     resolveSession:id=>resolveSession({data:{session:session(id)},error:null}),resolveLogout:()=>resolveLogout()};
 }
+
+test('portrait controls unlock after cold account initialization and stay blocked with an unavailable account lock',async()=>{
+  const f=fixture({initialUser:'account-a'});await flush();
+  assert.equal(f.app.getState().cloudReady,true);
+  assert.equal(f.document.querySelector('[data-action="portrait-edit"]').disabled,false);
+  const identityMarkup=f.elements.get('#identity').innerHTML;
+  const draft={dataUrl:portraitPng(),zoom:1.5,x:30,y:60};
+  f.app.showPortraitEditor(draft);
+  f.edit('motto','Convicção digitada antes de atualizar a conta');
+  const editedIdentity=f.elements.get('#identity').innerHTML;
+  f.emit('account-a');await f.runTimers();
+  assert.equal(f.document.querySelector('[data-action="portrait-edit"]').disabled,false);
+  assert.equal(f.elements.get('#identity').innerHTML,editedIdentity,'readiness updates must not replace typed identity inputs');
+  assert.equal(editedIdentity,identityMarkup);
+  assert.deepEqual(f.app.getState().portraitDraft,draft,'same-account refresh must not discard the crop draft');
+  assert.equal(f.app.getState().records[0].motto,'Convicção digitada antes de atualizar a conta');
+
+  const blocked=fixture({initialUser:'account-a',locks:null});await flush();
+  assert.equal(blocked.app.getState().cloudReady,false);
+  assert.equal(blocked.document.querySelector('[data-action="portrait-edit"]').disabled,true);
+  blocked.emit('account-a');await blocked.runTimers();
+  assert.equal(blocked.document.querySelector('[data-action="portrait-edit"]').disabled,true);
+});
 
 test('changing interface language preserves the active sheet, section, cloud gates, and stored data',async()=>{
   const character=model.createCharacter('Combate');character.notes='Inventário';

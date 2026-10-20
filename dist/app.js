@@ -138,6 +138,7 @@ function openOnboardingDialog() {
   showDialog(t('Entrar ou criar conta'),onboardingContent());onboardingDialogActive=true;
 }
 function updateAccountControls(refreshDialog=false) {
+  syncPortraitControls();
   const button=$('#account-button');
   setButtonLabel(button,t('Ajustes'),'settings');
   button.title=t('Configurações');
@@ -322,7 +323,7 @@ function portraitMarkup(portrait,preview=false) {
 function renderIdentity() {
   const c=current();
   $('#breadcrumb-name').textContent=c.name || t('Novo personagem');
-  $('#identity').innerHTML=ui`<section class="identity-card"><div class="record-mark"><img src="./assets/Image16.png" alt="Trespasser"><h1>Registro de personagem</h1><span>${getLanguage()==='pt'?'Character record · ':''}v2.1.3</span></div><div class="identity-fields"><div class="identity-top">${field(bilingual('Nome do personagem','Name'),'name',{placeholder:t('Nome'),max:100,cls:'identity-name'})}${field(bilingual('Jogador','Player'),'player',{placeholder:t('Jogador'),max:100})}</div>${field(bilingual('Palavras para viver','Words to live by'),'motto',{placeholder:t('Uma convicção, um voto, uma lembrança.')})}</div><div class="character-portrait">${portraitMarkup(c.portrait)}<div class="portrait-actions" data-portrait-controls><button type="button" class="button small" data-icon="person" data-action="portrait-edit" ${cloudUser&&!cloudReady?'disabled':''}>${t(c.portrait?.dataUrl?'Ajustar retrato':'Adicionar retrato')}</button>${c.portrait?.dataUrl?`<button type="button" class="text-button" data-action="portrait-remove" ${cloudUser&&!cloudReady?'disabled':''}>${t('Remover retrato')}</button>`:''}</div></div></section>`;
+  $('#identity').innerHTML=ui`<section class="identity-card"><div class="record-mark"><img src="./assets/Image16.png" alt="Trespasser"><h1>Registro de personagem</h1><span>${getLanguage()==='pt'?'Character record · ':''}v2.1.3</span></div><div class="identity-fields"><div class="identity-top">${field(bilingual('Nome do personagem','Name'),'name',{placeholder:t('Nome'),max:100,cls:'identity-name'})}${field(bilingual('Jogador','Player'),'player',{placeholder:t('Jogador'),max:100})}</div>${field(bilingual('Palavras para viver','Words to live by'),'motto',{placeholder:t('Uma convicção, um voto, uma lembrança.')})}</div><div class="character-portrait">${portraitMarkup(c.portrait)}<div class="portrait-actions" data-portrait-controls><button type="button" class="button small" data-icon="person" data-action="portrait-edit" ${!canEditPortrait()?'disabled':''}>${t(c.portrait?.dataUrl?'Ajustar retrato':'Adicionar retrato')}</button>${c.portrait?.dataUrl?`<button type="button" class="text-button" data-action="portrait-remove" ${!canEditPortrait()?'disabled':''}>${t('Remover retrato')}</button>`:''}</div></div></section>`;
   mountButtonIcons($('#identity'));
 }
 function plightsMarkup() {
@@ -331,6 +332,12 @@ function plightsMarkup() {
 }
 let portraitDraft=null,portraitOwner=null,portraitRequest=null;
 const canEditPortrait=()=>!cloudUser||cloudReady&&!cloudBlockedReason;
+function syncPortraitControls() {
+  const disabled=!canEditPortrait();
+  // Readiness changes only update existing controls; preserve identity inputs,
+  // focus, and any in-progress crop preview rather than rendering the card again.
+  document.querySelectorAll('[data-portrait-controls] button, [data-action="portrait-choose"], [data-action="portrait-save"]').forEach(button=>{button.disabled=disabled;});
+}
 function showPortraitEditor(draft) {
   if(!canEditPortrait())return;
   const owner={id:activeId,generation:cloudGeneration};
