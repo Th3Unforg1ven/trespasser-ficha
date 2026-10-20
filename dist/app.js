@@ -283,7 +283,7 @@ const signed = n=>n>0?`+${n}`:String(n);
 function renderSidebar() {
   $('#mobile-character-select').innerHTML=records.map(c=>`<option value="${esc(c.id)}" ${c.id===activeId?'selected':''}>${esc(c.name||'Novo personagem')}</option>`).join('');
   $('#character-list').innerHTML=records.map(c=>`<button class="character-item ${c.id===activeId?'selected':''}" data-character="${esc(c.id)}" ${c.id===activeId?'aria-current="true"':''}>${esc(c.name || 'Novo personagem')}</button>`).join('');
-  $('#navigation').innerHTML=tabs.map(([key,name,en,desc,symbol],i)=>`<button class="nav-item ${key===tab?'active':''}" data-tab="${key}" ${key===tab?'aria-current="page"':''}>${icon(symbol,'nav-icon')}<small>0${i+1}</small><span>${name}</span><span class="nav-english">${en}</span></button>`).join('');
+  $('#navigation').innerHTML=tabs.map(([key,name,en,desc,symbol])=>`<button class="nav-item ${key===tab?'active':''}" data-tab="${key}" ${key===tab?'aria-current="page"':''}>${icon(symbol,'nav-icon')}<span>${name}</span><span class="nav-english">${en}</span></button>`).join('');
 }
 function renderIdentity() {
   const c=current();
@@ -329,7 +329,7 @@ function render() {
   const selection=focused && ['text','search','url','tel','password'].includes(previous.type)||previous?.tagName==='TEXTAREA'
     ? {start:previous.selectionStart,end:previous.selectionEnd,direction:previous.selectionDirection,scroll:previous.scrollTop}:null;
   renderSidebar(); renderIdentity(); renderResources(); renderContent();
-  const i=tabs.findIndex(t=>t[0]===tab); $('#chapter-number').textContent=`0${i+1}`; $('#section-title').textContent=tabs[i][1]; $('#section-description').textContent=tabs[i][3];
+  const i=tabs.findIndex(t=>t[0]===tab); $('#section-title').textContent=tabs[i][1]; $('#section-description').textContent=tabs[i][3];
   if (focused) {
     const next=document.querySelector(`[data-field="${CSS.escape(focused)}"]`);next?.focus({preventScroll:true});
     if (selection && next?.setSelectionRange) {next.setSelectionRange(selection.start,selection.end,selection.direction);next.scrollTop=selection.scroll;}
