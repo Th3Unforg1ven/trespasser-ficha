@@ -21,12 +21,15 @@ html[data-theme="dark"] .page-transition-brand{filter:none}
 @keyframes transition-enter{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
 @keyframes transition-ink{0%,100%{opacity:1}50%{opacity:.55}}
 @media(max-width:900px){
-  .haven-page .top-actions{position:relative;padding-right:52px}
+  .haven-page .record-toolbar{position:relative;padding-top:48px}
+  .haven-page .top-actions{position:static;padding-right:0}
   .haven-page .top-actions>#haven-theme-toggle{position:absolute;right:0;top:0;min-width:44px;width:44px;min-height:44px;height:44px;grid-column:auto}
 }
 @media(max-width:760px){
-  .workspace .top-actions{position:relative;padding-right:52px;box-sizing:border-box}
-  .workspace .top-actions>:is(#workspace-theme-toggle,#haven-theme-toggle){position:absolute;right:0;top:9px;min-width:44px;width:44px;min-height:44px;height:44px;grid-column:auto}
+  .workspace .record-toolbar{position:relative}
+  .workspace .top-actions{position:static;padding-right:0;box-sizing:border-box}
+  .workspace:not(.haven-workspace) .archive-tools{padding-right:52px;box-sizing:border-box}
+  .workspace .top-actions>:is(#workspace-theme-toggle,#haven-theme-toggle){position:absolute;right:0;top:0;min-width:44px;width:44px;min-height:44px;height:44px;grid-column:auto}
 }
 @media(prefers-reduced-motion:reduce){.page-transition-panel,.page-transition-symbol{animation:none}}
 @media print{#page-transition,.page-transition,.theme-toggle{display:none!important}}
