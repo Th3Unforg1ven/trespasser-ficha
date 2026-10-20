@@ -1,14 +1,13 @@
-/* Five original engravings form one static panorama. Mobile keeps the castle. */
+/* A single precomposed panorama paints as one image. Mobile keeps the castle. */
 body[data-view="home"]{background:#080909;color:#f5f4ef}
 .landing[hidden],.landing [hidden],#record-workspace[hidden]{display:none!important}
 .landing{position:relative;isolation:isolate;display:flex;flex-direction:column;min-height:100svh;overflow:hidden;background:#080909;color:#f5f4ef;font-family:Lusitana,Georgia,serif}
 .landing-scene,.landing-shade{position:absolute;inset:0;pointer-events:none}
-.landing-scene{z-index:-2;overflow:hidden;background:#080909}
-.landing-shade{z-index:-1;background:linear-gradient(0deg,#080909 0,#080909ed 11%,#08090980 32%,transparent 66%),radial-gradient(ellipse 46% 44% at 50% 77%,#080909ed 0,#080909c7 52%,#08090926 86%,transparent 100%),linear-gradient(180deg,#080909b3 0,transparent 14%)}
-.landing-engraving{display:none}
+.landing-scene{z-index:-2;overflow:hidden;background:#080909;opacity:1;transition:opacity .4s ease-out}
+.landing-scene[data-art-state="loading"]{opacity:0;transition:none}
+.landing-shade{z-index:-1;background:linear-gradient(0deg,#080909 0,#080909d9 8%,#08090966 25%,transparent 58%),radial-gradient(ellipse 34% 45% at 50% 77%,#080909f2 0,#080909cc 48%,#0809093b 82%,transparent 100%),linear-gradient(180deg,#08090973 0,transparent 14%)}
 .landing-monster{position:absolute;inset:0;display:block;overflow:hidden}
-.landing-art,.landing-engraving img{display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.landing-art{object-position:center 48%;opacity:.72}
+.landing-art{display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 38%}
 .landing-header,.landing-footer{display:flex;align-items:center;gap:22px;padding:25px clamp(24px,4vw,80px);font-family:Lusitana,Georgia,serif;font-size:10px;letter-spacing:1.3px;line-height:1.5}
 .landing-header{justify-content:space-between;color:#d2d3ca;padding-bottom:0;position:relative;z-index:1}
 .landing-edition{display:flex;align-items:center;gap:22px}
@@ -33,20 +32,6 @@ body[data-view="home"]{background:#080909;color:#f5f4ef}
 .landing-footer>p{margin:0}
 .landing-footer>p>span{padding:0 10px;color:#d4d6c8}
 .landing :is(button,a):focus-visible{outline:2px solid #f5f4ef;outline-offset:5px}
-@media(min-width:621px){
-  .landing-engraving{position:absolute;display:block;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 17%,#000 80%,transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 17%,#000 80%,transparent 100%)}
-  .engraving-stairs{z-index:1;left:-2%;top:-2%;width:33%;height:104%;opacity:.91}
-  .engraving-stairs img{object-position:43% 20%}
-  .engraving-rider{z-index:3;left:10%;top:-12%;width:31%;height:80%;opacity:.97}
-  .engraving-rider,.engraving-portal{-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 17%,#000 80%,transparent 100%),linear-gradient(180deg,#000 70%,transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 17%,#000 80%,transparent 100%),linear-gradient(180deg,#000 70%,transparent 100%);-webkit-mask-composite:source-in;mask-composite:intersect}
-  .engraving-rider img{object-position:57% 46%}
-  .landing-monster{z-index:4;inset:auto;left:25%;top:0;width:42%;height:103%;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 20%,#000 82%,transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 20%,#000 82%,transparent 100%)}
-  .landing-monster .landing-art{object-position:62% 0;opacity:1}
-  .engraving-portal{z-index:3;right:8%;top:-4%;width:36%;height:86%;opacity:.96}
-  .engraving-portal img{object-position:67% 44%}
-  .engraving-abyss{z-index:5;right:-2%;top:12%;width:28%;height:72%;opacity:.98;-webkit-mask-image:radial-gradient(ellipse 78% 50% at 58% 50%,#000 46%,transparent 100%);mask-image:radial-gradient(ellipse 78% 50% at 58% 50%,#000 46%,transparent 100%)}
-  .engraving-abyss img{object-position:55% 57%}
-}
 @media(min-width:1700px){
   .landing.landing-montage .landing-content{width:min(100%,960px);padding-top:clamp(240px,38svh,460px);padding-bottom:22px}
   .landing.landing-montage #landing-title img{width:420px}
@@ -55,11 +40,6 @@ body[data-view="home"]{background:#080909;color:#f5f4ef}
   .landing.landing-montage .landing-footer{padding-bottom:24px}
 }
 @media(min-width:621px) and (max-width:1150px){
-  .engraving-stairs{left:-7%;width:35%}
-  .engraving-rider{left:6%;width:34%;top:-9%}
-  .landing-monster{left:22%;width:48%}
-  .engraving-portal{right:5%;width:39%}
-  .engraving-abyss{right:-2%;width:31%}
   .landing.landing-montage .landing-content{padding-top:clamp(160px,28svh,260px)}
   .landing.landing-montage #landing-title img{width:350px}
 }
@@ -67,8 +47,8 @@ body[data-view="home"]{background:#080909;color:#f5f4ef}
   .landing-header{padding:20px 24px 0;font-size:8px;gap:14px}
   .landing-edition{gap:12px}
   .landing-edition>span{padding-left:12px;font-size:9px}
-  .landing-art{object-position:center 48%;opacity:.72}
-  .landing-shade{background:linear-gradient(0deg,#080909 0,#080909e0 24%,#08090980 61%,#08090933 100%)}
+  .landing-art{object-position:center 48%;opacity:.88}
+  .landing-shade{background:linear-gradient(0deg,#080909 0,#080909e0 20%,#08090980 55%,#0809091a 100%)}
   .landing.landing-montage .landing-content{width:100%;min-height:calc(100svh - 122px);padding:clamp(100px,17svh,160px) 26px 20px;justify-content:flex-end}
   .landing.landing-montage .landing-kicker{font-size:10px;letter-spacing:2px;margin-bottom:14px}
   .landing.landing-montage #landing-title img{width:min(100%,325px)}
@@ -97,4 +77,15 @@ body[data-view="home"]{background:#080909;color:#f5f4ef}
   .landing.landing-montage .landing-description{font-size:16px;margin-bottom:17px}
   .landing.landing-montage .landing-footer{min-height:38px;padding-bottom:12px}
 }
+@media(min-width:621px) and (max-width:960px) and (max-height:500px){
+  .landing-header{padding-top:6px}
+  .landing.landing-montage .landing-content{padding-top:20px;padding-bottom:8px}
+  .landing.landing-montage #landing-title img{width:210px}
+  .landing.landing-montage .landing-kicker{font-size:10px;margin-bottom:6px}
+  .landing.landing-montage .landing-rule{margin:8px 0}
+  .landing.landing-montage .landing-content h2{font-size:27px;margin-bottom:8px}
+  .landing.landing-montage .landing-description{font-size:14px;line-height:1.4;margin-bottom:12px;max-width:600px}
+  .landing.landing-montage .landing-footer{min-height:28px;padding-top:4px;padding-bottom:6px}
+}
+@media(prefers-reduced-motion:reduce){.landing-scene{transition:none}}
 @media print{#landing,.home-button{display:none!important}body[data-view="home"]{background:#fff!important;color:#111!important}}

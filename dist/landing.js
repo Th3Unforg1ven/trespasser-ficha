@@ -1,6 +1,7 @@
 import { mountButtonIcons } from './icons.js?v=ink-1';
 import { consumeHavenReturn } from './auth-return.js';
 import { createPageTransition } from './ui-shell.js?v=onboarding-1';
+import { setupLandingArt } from './landing-art.js?v=panorama-1';
 
 const VIEW_KEY='trespasser.view.v1';
 
@@ -27,6 +28,7 @@ export function setupLanding({document,window,sessionStorage,location},{
   const $=selector=>document.querySelector(selector);
   const landing=$('#landing'),workspace=$('#record-workspace');
   if(!landing||!workspace)return;
+  const artwork=setupLandingArt({document,window});
   const read=(storage,key)=>{try{return storage.getItem(key);}catch{return null;}};
   const write=(storage,key,value)=>{try{storage.setItem(key,value);}catch{/* Navigation also works without storage. */}};
   const authReturn=isAuthReturn(location);
@@ -104,7 +106,7 @@ export function setupLanding({document,window,sessionStorage,location},{
   });
   window.addEventListener('pageshow',event=>{if(event.persisted){cancelNavigation();updateControls();}});
   setView('home',false);updateControls();
-  return {setView,openCharacters,openHavens};
+  return {setView,openCharacters,openHavens,artwork};
 }
 
 if(typeof document!=='undefined')setupLanding({document,window,sessionStorage,location});
