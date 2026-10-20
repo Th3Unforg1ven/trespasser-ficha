@@ -1,4 +1,4 @@
-/* A single precomposed panorama paints as one image. Mobile keeps the castle. */
+/* One precomposed panorama per screen shape, using the same five engravings. */
 body[data-view="home"]{background:#080909;color:#f5f4ef}
 .landing[hidden],.landing [hidden],#record-workspace[hidden]{display:none!important}
 .landing{position:relative;isolation:isolate;display:flex;flex-direction:column;min-height:100svh;overflow:hidden;background:#080909;color:#f5f4ef;font-family:Lusitana,Georgia,serif}
@@ -47,7 +47,7 @@ body[data-view="home"]{background:#080909;color:#f5f4ef}
   .landing-header{padding:20px 24px 0;font-size:8px;gap:14px}
   .landing-edition{gap:12px}
   .landing-edition>span{padding-left:12px;font-size:9px}
-  .landing-art{object-position:center 48%;opacity:.88}
+  .landing-art{object-position:center top;opacity:1}
   .landing-shade{background:linear-gradient(0deg,#080909 0,#080909e0 20%,#08090980 55%,#0809091a 100%)}
   .landing.landing-montage .landing-content{width:100%;min-height:calc(100svh - 122px);padding:clamp(100px,17svh,160px) 26px 20px;justify-content:flex-end}
   .landing.landing-montage .landing-kicker{font-size:10px;letter-spacing:2px;margin-bottom:14px}
