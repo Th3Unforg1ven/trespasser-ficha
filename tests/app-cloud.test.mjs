@@ -96,7 +96,7 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
   }
   const document={hidden:false,activeElement:null,documentElement:{dataset:{},style:{}},
     querySelector:selector=>elements.get(selector)||[...identityPortraitButtons(),...dialogPortraitControls()].find(control=>matchPortraitControl(control,selector))||null,
-    querySelectorAll:selector=>selector.startsWith('#export-button')?[elements.get('#export-button')]:[...resourceNodes(selector),...(selector.includes('[data-portrait-controls]')?identityPortraitButtons():[]),...dialogPortraitControls().filter(control=>selector.split(', ').some(part=>matchPortraitControl(control,part)))],
+    querySelectorAll:selector=>selector.startsWith('#export-button')?[elements.get('#export-button')]:[...resourceNodes(selector),...(selector.includes('[data-action="portrait-edit"]')?identityPortraitButtons():[]),...dialogPortraitControls().filter(control=>selector.split(', ').some(part=>matchPortraitControl(control,part)))],
     createElement:()=>{const element=new Element();element.ownerDocument=document;return element;},createTextNode:text=>({textContent:text}),
     addEventListener(event,listener){const prior=documentListeners.get(event);documentListeners.set(event,prior?value=>{prior(value);listener(value);}:listener);}};
   for(const element of elements.values())element.ownerDocument=document;
@@ -340,7 +340,7 @@ test('the portrait card exposes one edit icon and opens an empty editor before c
   const f=fixture();await flush();
   const identity=f.elements.get('#identity').innerHTML;
   assert.equal([...identity.matchAll(/data-action="portrait-/g)].length,1);
-  assert.match(identity,/class="portrait-edit-control icon-button" data-icon="edit" data-action="portrait-edit" aria-label="Editar retrato"/);
+  assert.match(identity,/class="portrait-edit-target" data-action="portrait-edit" aria-label="Editar retrato"/);
   assert.doesNotMatch(identity,/data-action="portrait-remove"|>Adicionar retrato<|>Ajustar retrato</);
   const before=JSON.stringify(f.app.getState().records),writes=f.writes.length;
   f.clickAction('portrait-edit');

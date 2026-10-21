@@ -318,12 +318,13 @@ function renderSidebar() {
   $('#navigation').innerHTML=tabs.map(([key,name,en,desc,symbol])=>ui`<button class="nav-item ${key===tab?'active':''}" data-tab="${key}" ${key===tab?'aria-current="page"':''}>${icon(symbol,'nav-icon')}<span>${t(name)}</span>${getLanguage()==='pt'?ui`<span class="nav-english">${en}</span>`:''}</button>`).join('');
 }
 function portraitMarkup(portrait,preview=false) {
-  return `<div class="portrait-frame${preview?' portrait-preview':''}">${portrait?.dataUrl?`<img src="${esc(portrait.dataUrl)}" alt="${esc(t('Retrato do personagem'))}" style="${esc(portraitStyle(portrait))}">`:`<div class="portrait-placeholder">${icon('person')}<span>${t('Retrato do personagem')}</span></div>`}</div>`;
+  const tag=preview?'div':'span';
+  return `<${tag} class="portrait-frame${preview?' portrait-preview':''}">${portrait?.dataUrl?`<img src="${esc(portrait.dataUrl)}" alt="${esc(t('Retrato do personagem'))}" style="${esc(portraitStyle(portrait))}">`:`<${tag} class="portrait-placeholder">${icon('person')}<span>${t('Retrato do personagem')}</span></${tag}>`}</${tag}>`;
 }
 function renderIdentity() {
   const c=current();
   $('#breadcrumb-name').textContent=c.name || t('Novo personagem');
-  $('#identity').innerHTML=ui`<section class="identity-card"><div class="record-mark"><img src="./assets/Image16.png" alt="Trespasser"><h1>Registro de personagem</h1><span>${getLanguage()==='pt'?'Character record · ':''}v2.1.3</span></div><div class="identity-fields"><div class="identity-top">${field(bilingual('Nome do personagem','Name'),'name',{placeholder:t('Nome'),max:100,cls:'identity-name'})}${field(bilingual('Jogador','Player'),'player',{placeholder:t('Jogador'),max:100})}</div>${field(bilingual('Palavras para viver','Words to live by'),'motto',{placeholder:t('Uma convicção, um voto, uma lembrança.')})}</div><div class="character-portrait">${portraitMarkup(c.portrait)}<div class="portrait-actions" data-portrait-controls><button type="button" class="portrait-edit-control icon-button" data-icon="edit" data-action="portrait-edit" aria-label="${t('Editar retrato')}" title="${t('Editar retrato')}" ${!canEditPortrait()?'disabled':''}></button></div></div></section>`;
+  $('#identity').innerHTML=ui`<section class="identity-card"><div class="record-mark"><img src="./assets/Image16.png" alt="Trespasser"><h1>Registro de personagem</h1><span>${getLanguage()==='pt'?'Character record · ':''}v2.1.3</span></div><div class="identity-fields"><div class="identity-top">${field(bilingual('Nome do personagem','Name'),'name',{placeholder:t('Nome'),max:100,cls:'identity-name'})}${field(bilingual('Jogador','Player'),'player',{placeholder:t('Jogador'),max:100})}</div>${field(bilingual('Palavras para viver','Words to live by'),'motto',{placeholder:t('Uma convicção, um voto, uma lembrança.')})}</div><div class="character-portrait"><button type="button" class="portrait-edit-target" data-action="portrait-edit" aria-label="${t('Editar retrato')}" title="${t('Editar retrato')}" ${!canEditPortrait()?'disabled':''}>${portraitMarkup(c.portrait)}<span class="portrait-actions" data-portrait-controls aria-hidden="true"><span class="portrait-edit-control"><span class="button-symbol">${icon('edit')}</span></span></span></button></div></section>`;
   mountButtonIcons($('#identity'));
 }
 function plightsMarkup() {
@@ -338,7 +339,7 @@ function syncPortraitControls() {
   const disabled=!canEditPortrait();
   // Readiness changes only update existing controls; preserve identity inputs,
   // focus, and any in-progress crop preview rather than rendering the card again.
-  document.querySelectorAll('[data-portrait-controls] button, [data-action="portrait-choose"]').forEach(button=>{button.disabled=disabled;});
+  document.querySelectorAll('[data-action="portrait-edit"], [data-action="portrait-choose"]').forEach(button=>{button.disabled=disabled;});
   document.querySelectorAll('[data-action="portrait-save"]').forEach(button=>{button.disabled=!canSavePortrait();});
   document.querySelectorAll('[data-action="portrait-remove"], [data-portrait-crop]').forEach(control=>{control.disabled=disabled||!hasPortraitDraft()||!portraitDraft.dataUrl;});
 }
