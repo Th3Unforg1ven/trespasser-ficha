@@ -73,9 +73,30 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
     return portraitDialogControls;
   }
   const matchPortraitControl=(control,selector)=>selector===`[data-action="${control.dataset.action}"]`||selector==='[data-portrait-crop]'&&control.dataset.portraitCrop;
+  const resourceDom=new Map();
+  function resourceNodes(selector){
+    const kind={'[data-resource-value]':'resourceValue','[data-resource-max]':'resourceMax','[data-resource-track]':'resourceTrack'}[selector];
+    if(!kind)return [];
+    for(const container of ['#resources','#sheet-content']){
+      const markup=elements.get(container).innerHTML;
+      if(resourceDom.get(container)?.markup===markup)continue;
+      const nodes=[];
+      for(const match of markup.matchAll(/<(input|span|i)\b([^>]*data-resource-(value|max|track)="([^"]+)"[^>]*)>([^<]*)/g)){
+        const node=new Element();node.tagName=match[1].toUpperCase();node.dataset[`resource${match[3][0].toUpperCase()+match[3].slice(1)}`]=match[4];node.style={};
+        if(match[1]==='input'){
+          node.type='number';node.dataset.field=`resources.${match[4]}`;node.min=match[2].match(/min="([^"]+)"/)?.[1]||'';node.max=match[2].match(/max="([^"]+)"/)?.[1]||'';
+          node.value=match[2].match(/(?:^|\s)value="([^"]+)"/)?.[1]||'';node.step='1';node.disabled=/\bdisabled\b/.test(match[2]);node.matches=selector=>selector==='[data-field]';
+        } else if(match[1]==='span')node.textContent=match[5];
+        else node.style.width=match[2].match(/width:([^;" ]+)/)?.[1]||'';
+        nodes.push(node);
+      }
+      resourceDom.set(container,{markup,nodes});
+    }
+    return [...resourceDom.values()].flatMap(entry=>entry.nodes).filter(node=>kind in node.dataset);
+  }
   const document={hidden:false,activeElement:null,documentElement:{dataset:{},style:{}},
     querySelector:selector=>elements.get(selector)||[...identityPortraitButtons(),...dialogPortraitControls()].find(control=>matchPortraitControl(control,selector))||null,
-    querySelectorAll:selector=>selector.startsWith('#export-button')?[elements.get('#export-button')]:[...(selector.includes('[data-portrait-controls]')?identityPortraitButtons():[]),...dialogPortraitControls().filter(control=>selector.split(', ').some(part=>matchPortraitControl(control,part)))],
+    querySelectorAll:selector=>selector.startsWith('#export-button')?[elements.get('#export-button')]:[...resourceNodes(selector),...(selector.includes('[data-portrait-controls]')?identityPortraitButtons():[]),...dialogPortraitControls().filter(control=>selector.split(', ').some(part=>matchPortraitControl(control,part)))],
     createElement:()=>{const element=new Element();element.ownerDocument=document;return element;},createTextNode:text=>({textContent:text}),
     addEventListener(event,listener){const prior=documentListeners.get(event);documentListeners.set(event,prior?value=>{prior(value);listener(value);}:listener);}};
   for(const element of elements.values())element.ownerDocument=document;
@@ -107,7 +128,7 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
   const runTimers=async(delay=0)=>{for(const[id,timer]of[...timers])if(timer.delay===delay){timers.delete(id);timer.fn();}await flush();};
   function edit(path,value,element={}){const target={dataset:{field:path},value,type:'text',matches:selector=>selector==='[data-field]',...element};documentListeners.get('input')({target});}
   return{app,storage,localStorage,writes,elements,auth,adapter,calls,events,emit,runTimers,edit,remote,locks,windowListeners,document,clickAction:(action,extra={})=>documentListeners.get('click')({target:{closest:selector=>selector==='button'?({dataset:{action,...extra}}):null}}),setQuotaFailure:value=>{quotaFailure=value;},
-    change:target=>documentListeners.get('change')({target}),
+    change:target=>documentListeners.get('change')({target}),input:target=>documentListeners.get('input')({target}),
     resolveSession:id=>resolveSession({data:{session:session(id)},error:null}),resolveLogout:()=>resolveLogout()};
 }
 
@@ -205,7 +226,7 @@ test('resource help explains calculated HP, daily recovery pools, and uncapped F
   const before=JSON.stringify(f.app.getState().records),writes=f.writes.filter(([key])=>key===KEY).length;
   const strip=f.elements.get('#resources').innerHTML;
   assert.equal((strip.match(/data-resource-help=/g)||[]).length,5);
-  assert.match(strip,/max="40" data-field="resources.hp" value="6"/);
+  assert.match(strip,/max="40" data-field="resources.hp"[^>]*value="6"/);
   f.clickAction('',{resourceHelp:'hp'});
   assert.match(f.elements.get('#dialog-content').innerHTML,/\(4 \+ 1\) × \(5 \+ 2\) \+ 5 = 40 PV/);
   assert.match(f.elements.get('#dialog-content').innerHTML,/sem restaurar os PV atuais/);
@@ -243,6 +264,58 @@ test('level-zero resource help explains Commoner rules while preserving stored v
   f.clickAction('',{resourceHelp:'resolve'});
   assert.match(f.elements.get('#dialog-content').innerHTML,/habilita a partir do nível 1/);
   assert.equal(JSON.stringify(f.app.getState().records),before);
+});
+
+test('inline health resources and the top strip share changes immediately without replacing the focused input',async()=>{
+  const character=model.createCharacter('Saúde compartilhada');character.resources.hp=6;character.resources.endurance=4;
+  const f=fixture({guest:character});await flush();
+  const inputs=key=>f.document.querySelectorAll('[data-resource-value]').filter(input=>input.dataset.resourceValue===key);
+  assert.match(f.elements.get('#sheet-content').innerHTML,/resource-strip-inline resource-strip-health/);
+  for(const key of ['hp','recovery','endurance'])assert.equal(inputs(key).length,2);
+  assert.equal(inputs('focus').length,1,'Character health panel contains only the three health resources');
+  assert.match(f.elements.get('#sheet-content').innerHTML,/resource-strip-inline resource-strip-alignment/);
+  assert.equal(inputs('resolve').length,2,'Resolve is also available within Alignment');
+  const [top,inline]=inputs('hp');f.document.activeElement=inline;
+  const topMarkup=f.elements.get('#resources').innerHTML,contentMarkup=f.elements.get('#sheet-content').innerHTML;
+  inline.value='8';f.input(inline);
+  assert.equal(f.app.getState().records[0].resources.hp,8);
+  assert.deepEqual(inputs('hp').map(input=>Number(input.value)),[8,8]);
+  assert.equal(f.document.activeElement,inline);assert.equal(inputs('hp')[1],inline);
+  assert.equal(f.elements.get('#resources').innerHTML,topMarkup);assert.equal(f.elements.get('#sheet-content').innerHTML,contentMarkup);
+  assert.ok(f.document.querySelectorAll('[data-resource-track]').filter(track=>track.dataset.resourceTrack==='hp').every(track=>track.style.width==='80%'));
+  f.change(inline);
+  assert.equal(inputs('hp')[1],inline,'committing a number keeps the same control and focus');
+  f.clickAction('',{resource:'hp',delta:'-1'});
+  assert.deepEqual(inputs('hp').map(input=>Number(input.value)),[7,7]);
+  top.value='5';f.input(top);
+  assert.deepEqual(inputs('hp').map(input=>Number(input.value)),[5,5]);
+  const endurance=inputs('endurance')[1];endurance.value='2';f.input(endurance);
+  assert.deepEqual(inputs('endurance').map(input=>Number(input.value)),[2,2]);
+  assert.deepEqual(inputs('recovery').map(input=>Number(input.value)),[10,10],'changing Endurance preserves the current recovery pool');
+  assert.equal(f.app.getState().records[0].resources.recoveryTotal,10);
+  const alignmentResolve=inputs('resolve')[1];alignmentResolve.value='2';f.input(alignmentResolve);f.change(alignmentResolve);
+  assert.deepEqual(inputs('resolve').map(input=>Number(input.value)),[2,2]);
+});
+
+test('Combat shares health and deed resource controls, retains Focus above its start, and honors resource bounds',async()=>{
+  const character=model.createCharacter('Combate compartilhado');character.resources.focus=17;character.resources.resolve=2;
+  const f=fixture({guest:character});await flush();f.clickAction('',{tab:'combat'});
+  const markup=f.elements.get('#sheet-content').innerHTML;
+  assert.match(markup,/two-columns combat-overview/);assert.match(markup,/panel movement-panel/);assert.match(markup,/panel combat-health-panel/);
+  assert.match(markup,/resource-strip-inline resource-strip-focus/);
+  const inputs=key=>f.document.querySelectorAll('[data-resource-value]').filter(input=>input.dataset.resourceValue===key);
+  for(const key of ['hp','recovery','endurance','focus','resolve'])assert.equal(inputs(key).length,2);
+  const inlineFocus=inputs('focus')[1];f.document.activeElement=inlineFocus;inlineFocus.value='25';f.input(inlineFocus);f.change(inlineFocus);
+  assert.deepEqual(inputs('focus').map(input=>Number(input.value)),[25,25]);assert.equal(f.app.getState().records[0].resources.focus,25);
+  assert.equal(inputs('focus')[1],inlineFocus);assert.equal(f.document.activeElement,inlineFocus);
+  f.clickAction('',{resource:'focus',delta:'1'});
+  assert.deepEqual(inputs('focus').map(input=>Number(input.value)),[26,26]);
+  for(let n=0;n<3;n++)f.clickAction('',{resource:'resolve',delta:'1'});
+  assert.deepEqual(inputs('resolve').map(input=>Number(input.value)),[3,3]);
+  const inlineHp=inputs('hp')[1];inlineHp.value='99';f.input(inlineHp);f.change(inlineHp);
+  assert.deepEqual(inputs('hp').map(input=>Number(input.value)),[10,10],'both controls use the calculated HP maximum');
+  const raw=JSON.parse(f.storage.get(KEY));
+  assert.equal(raw.characters[0].resources.focus,26);assert.equal(raw.characters[0].resources.resolve,3);assert.equal(raw.characters[0].resources.hp,10);
 });
 
 test('portrait adjustments remain a draft until saved and are discarded when the account changes',async()=>{
