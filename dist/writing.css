@@ -1,0 +1,47 @@
+/* IM Fell English by Igino Marini, distributed under the bundled SIL OFL. */
+@font-face {
+  font-family:'IM Fell English';
+  src:url('./assets/fonts/IMFellEnglish-Italic.woff2') format('woff2');
+  font-style:italic;
+  font-weight:400;
+  font-display:swap;
+}
+/* The regular face only needs the glyphs used by numeric controls. */
+@font-face {
+  font-family:'IM Fell English';
+  src:url('./assets/fonts/IMFellEnglish-Numerals.woff2') format('woff2');
+  font-style:normal;
+  font-weight:400;
+  font-display:swap;
+  unicode-range:U+002B-0039,U+0045,U+0065;
+}
+:root {--record-writing-font:'IM Fell English',Lusitana,Georgia,serif}
+
+:is(.workspace,#utility-dialog,#print-document) :is(input:not([type]),input[type="text"],input[type="search"],input[type="url"],input[type="email"],input[type="tel"],textarea,select) {
+  font-family:var(--record-writing-font);
+  font-style:italic;
+  font-weight:400;
+  font-size:18px;
+  letter-spacing:0;
+  text-transform:none;
+}
+:is(.workspace,#utility-dialog,#print-document) :is(input:not([type]),input[type="text"],input[type="search"],input[type="url"],input[type="email"],input[type="tel"],select) {min-height:36px}
+:is(.workspace,#utility-dialog,#print-document) :is(input[type="number"],select[data-field="level"]) {
+  font-family:var(--record-writing-font);
+  font-style:normal;
+  font-weight:400;
+  letter-spacing:0;
+}
+:is(.workspace,#utility-dialog,#print-document) :is(.identity-name input,.haven-identity>.field>input) {font-size:26px;min-height:42px}
+:is(.workspace,#utility-dialog,#print-document) select option {font-family:inherit;font-style:inherit;font-weight:400}
+:is(.workspace,#utility-dialog,#print-document) :is(input,textarea)::placeholder {font-family:inherit;font-style:inherit;font-weight:400}
+
+@media screen and (max-width:600px) {
+  :is(.workspace,#utility-dialog) :is(input:not([type]),input[type="text"],input[type="search"],input[type="url"],input[type="email"],input[type="tel"],textarea,select) {font-size:17px}
+  :is(.workspace,#utility-dialog) :is(.identity-name input,.haven-identity>.field>input) {font-size:21px;min-height:39px}
+  .workspace .mobile-character-choice select {font-size:16px}
+}
+@media print {
+  :is(.workspace,#utility-dialog,#print-document) :is(input:not([type]),input[type="text"],textarea,select) {font-size:11pt}
+  :is(.workspace,#utility-dialog,#print-document) :is(.identity-name input,.haven-identity>.field>input) {font-size:16pt}
+}
