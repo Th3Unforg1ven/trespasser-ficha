@@ -20,7 +20,9 @@ const flush=async()=>{for(let i=0;i<24;i++)await Promise.resolve();};
 const session=id=>id?{user:{id,email:`${id}@example.test`}}:null;
 
 class Element {
-  constructor(){this.dataset={};this.listeners=new Map();this.children=[];this.innerHTML='';this.textContent='';this.open=false;this.disabled=false;this.type='';this.tagName='DIV';}
+  constructor(){this.dataset={};this.listeners=new Map();this.children=[];this._innerHTML='';this.innerHTMLWrites=0;this.textContent='';this.open=false;this.disabled=false;this.type='';this.tagName='DIV';}
+  get innerHTML(){return this._innerHTML;}
+  set innerHTML(value){this._innerHTML=value;this.innerHTMLWrites++;}
   addEventListener(name,fn){this.listeners.set(name,fn);}
   setAttribute(name,value){this[name]=value;}
   removeAttribute(name){delete this[name];}
@@ -32,7 +34,7 @@ class Element {
   showModal(){this.open=true;}
   close(){this.open=false;}
   click(){this.clickCount=(this.clickCount||0)+1;}
-  focus(){}
+  focus(){this.focusCount=(this.focusCount||0)+1;if(this.ownerDocument)this.ownerDocument.activeElement=this;}
 }
 
 function browserLocks() {
@@ -44,9 +46,9 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
   const elements=new Map([...html.matchAll(/\bid="([^"]+)"/g)].map(match=>[`#${match[1]}`,new Element()]));
   const documentListeners=new Map(),windowListeners=new Map();
   const storage=new Map([[KEY,JSON.stringify({version:1,activeId:guest.id,characters:[guest]})]]);
-  const writes=[];
+  const writes=[],writeAttempts=[];
   let quotaFailure=false;
-  const localStorage={getItem:key=>storage.get(key)??null,setItem(key,value){if(quotaFailure)throw new Error('Quota exceeded');writes.push([key,value]);storage.set(key,value);}};
+  const localStorage={getItem:key=>storage.get(key)??null,setItem(key,value){writeAttempts.push([key,value]);if(quotaFailure)throw new Error('Quota exceeded');writes.push([key,value]);storage.set(key,value);}};
   let portraitHtml='',portraitButtons=[];
   function identityPortraitButtons() {
     const markup=elements.get('#identity').innerHTML;
@@ -74,6 +76,19 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
   }
   const matchPortraitControl=(control,selector)=>selector===`[data-action="${control.dataset.action}"]`||selector==='[data-portrait-crop]'&&control.dataset.portraitCrop;
   const resourceDom=new Map();
+  let navigationHtml='',navigationButtons=[];
+  function navigationNodes(){
+    const markup=elements.get('#navigation').innerHTML;
+    if(markup!==navigationHtml){
+      navigationHtml=markup;
+      navigationButtons=[...markup.matchAll(/<button\b([^>]*data-tab="([^"]+)"[^>]*)>/g)].map(match=>{
+        const button=new Element(),classes=new Set((match[1].match(/class="([^"]+)"/)?.[1]||'').split(/\s+/));button.dataset.tab=match[2];button.tagName='BUTTON';
+        button.classList={contains:name=>classes.has(name),toggle(name,active){if(active)classes.add(name);else classes.delete(name);}};
+        if(/aria-current="page"/.test(match[1]))button.setAttribute('aria-current','page');return button;
+      });
+    }
+    return navigationButtons;
+  }
   function resourceNodes(selector){
     const kind={'[data-resource-value]':'resourceValue','[data-resource-max]':'resourceMax','[data-resource-track]':'resourceTrack'}[selector];
     if(!kind)return [];
@@ -96,7 +111,7 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
   }
   const document={hidden:false,activeElement:null,documentElement:{dataset:{},style:{}},
     querySelector:selector=>elements.get(selector)||[...identityPortraitButtons(),...dialogPortraitControls()].find(control=>matchPortraitControl(control,selector))||null,
-    querySelectorAll:selector=>selector.startsWith('#export-button')?[elements.get('#export-button')]:[...resourceNodes(selector),...(selector.includes('[data-action="portrait-edit"]')?identityPortraitButtons():[]),...dialogPortraitControls().filter(control=>selector.split(', ').some(part=>matchPortraitControl(control,part)))],
+    querySelectorAll:selector=>selector.startsWith('#export-button')?[elements.get('#export-button')]:selector==='#navigation [data-tab]'?navigationNodes():[...resourceNodes(selector),...(selector.includes('[data-action="portrait-edit"]')?identityPortraitButtons():[]),...dialogPortraitControls().filter(control=>selector.split(', ').some(part=>matchPortraitControl(control,part)))],
     createElement:()=>{const element=new Element();element.ownerDocument=document;return element;},createTextNode:text=>({textContent:text}),
     addEventListener(event,listener){const prior=documentListeners.get(event);documentListeners.set(event,prior?value=>{prior(value);listener(value);}:listener);}};
   for(const element of elements.values())element.ownerDocument=document;
@@ -127,7 +142,7 @@ function fixture({guest=model.createCharacter('Ficha local'),initialUser=null,de
   const app=run(...Object.values(dependencies));
   const runTimers=async(delay=0)=>{for(const[id,timer]of[...timers])if(timer.delay===delay){timers.delete(id);timer.fn();}await flush();};
   function edit(path,value,element={}){const target={dataset:{field:path},value,type:'text',matches:selector=>selector==='[data-field]',...element};documentListeners.get('input')({target});}
-  return{app,storage,localStorage,writes,elements,auth,adapter,calls,events,emit,runTimers,edit,remote,locks,windowListeners,document,clickAction:(action,extra={})=>documentListeners.get('click')({target:{closest:selector=>selector==='button'?({dataset:{action,...extra}}):null}}),setQuotaFailure:value=>{quotaFailure=value;},
+  return{app,storage,localStorage,writes,writeAttempts,elements,auth,adapter,calls,events,emit,runTimers,edit,remote,locks,windowListeners,document,clickAction:(action,extra={})=>documentListeners.get('click')({target:{closest:selector=>selector==='button'?({dataset:{action,...extra}}):null}}),setQuotaFailure:value=>{quotaFailure=value;},
     change:target=>documentListeners.get('change')({target}),input:target=>documentListeners.get('input')({target}),
     resolveSession:id=>resolveSession({data:{session:session(id)},error:null}),resolveLogout:()=>resolveLogout()};
 }
@@ -320,6 +335,86 @@ test('Combat keeps only the top resources, retains Focus above its start, and ho
   assert.equal(Number(hp.value),10,'the control uses the calculated HP maximum');
   const raw=JSON.parse(f.storage.get(KEY));
   assert.equal(raw.characters[0].resources.focus,26);assert.equal(raw.characters[0].resources.resolve,3);assert.equal(raw.characters[0].resources.hp,10);
+});
+
+test('input persists numbers and checkboxes once while change without input still applies and saves its value',async()=>{
+  const character=model.createCharacter('Eventos preservados');character.resources.hp=6;
+  character.deeds.push({id:'one-deed',name:'Feito',kind:'light',cost:0,focus:0,description:''});
+  const f=fixture({guest:character});await flush();
+  const field=(path,value,options={})=>({dataset:{field:path},value:String(value),type:'number',tagName:'INPUT',min:'0',max:'100',step:'1',matches:selector=>selector==='[data-field]',...options});
+  const persisted=()=>JSON.parse(f.storage.get(KEY)).characters[0];
+  let count=f.writes.length;
+  const hp=f.document.querySelectorAll('[data-resource-value]').find(input=>input.dataset.resourceValue==='hp');hp.value='7';
+  f.input(hp);assert.equal(persisted().resources.hp,7,'the input is durable before blur or timers');
+  f.change(hp);assert.equal(f.writes.length,count+1,'the matching change does not write the same snapshot again');
+  count=f.writes.length;
+  const might=field('attributes.might',2);f.change(might);
+  assert.equal(persisted().attributes.might,2);assert.equal(persisted().resources.hp,7);assert.equal(f.writes.length,count+1);
+  assert.equal(model.derive(f.app.getState().records[0]).hpMax,14);
+  count=f.writes.length;
+  const armor=field('armor.0.spent','',{type:'checkbox',checked:true});f.input(armor);f.change(armor);
+  assert.equal(persisted().armor[0].spent,true);assert.equal(f.writes.length,count+1);
+  const unchecked=field('armor.0.spent','',{type:'checkbox',checked:false});f.change(unchecked);
+  assert.equal(persisted().armor[0].spent,false,'a checkbox change without input also updates the model');
+  const kind=field('deeds.0.kind','mighty',{tagName:'SELECT',type:'select-one'});f.input(kind);f.change(kind);
+  assert.equal(persisted().deeds[0].kind,'mighty');assert.equal(persisted().deeds[0].cost,4,'the change still applies category-dependent deed costs');
+});
+
+test('change retries a failed synchronous cache write for guest and account edits, then suppresses duplicates after recovery',async()=>{
+  for(const signedIn of [false,true]){
+    const character=model.createCharacter('Retentativa');character.id='retry-hero';character.resources.hp=6;
+    const remote=new Map([['account-a',[{id:character.id,data:character,revision:1,deleted_at:null}]]]);
+    const f=fixture({guest:character,initialUser:signedIn?'account-a':null,remote});await flush();
+    const key=signedIn?`${KEY}.cloud.account-a`:KEY;
+    const attempts=()=>f.writeAttempts.filter(([writeKey])=>writeKey===key).length;
+    const hp=f.document.querySelectorAll('[data-resource-value]').find(input=>input.dataset.resourceValue==='hp'),before=attempts();
+    f.setQuotaFailure(true);hp.value='8';f.input(hp);f.change(hp);
+    assert.equal(attempts(),before+2,'an uncached input cannot suppress the next retry');
+    assert.equal(f.app.getState().records[0].resources.hp,8,'failed storage retains the edit in memory');
+    f.setQuotaFailure(false);f.change(hp);
+    const cached=JSON.parse(f.storage.get(key));
+    assert.equal((signedIn?cached.records:cached.characters)[0].resources.hp,8);
+    assert.equal(attempts(),before+3);
+    f.change(hp);assert.equal(attempts(),before+3,'a retry confirmed in local storage now suppresses duplicate change events');
+  }
+});
+
+test('change can correct an account edit rejected by model validation without another input event',async()=>{
+  const character=model.createCharacter('Validação');character.id='validated-hero';
+  const remote=new Map([['account-a',[{id:character.id,data:character,revision:1,deleted_at:null}]]]);
+  const f=fixture({initialUser:'account-a',remote});await flush();
+  const attribute={dataset:{field:'attributes.might'},value:'6',type:'number',tagName:'INPUT',min:'0',max:'10',step:'1',matches:selector=>selector==='[data-field]'};
+  f.input(attribute);assert.equal(f.app.getState().cloudStatus.state,'error');
+  attribute.value='5';f.change(attribute);
+  assert.equal(f.app.getState().records[0].attributes.might,5);
+  assert.equal(JSON.parse(f.storage.get(`${KEY}.cloud.account-a`)).records[0].attributes.might,5);
+  assert.equal(f.app.getState().cloudStatus.state,'pending');
+});
+
+test('tab navigation updates content and existing nav state while preserving identity, portrait, resources, and data',async()=>{
+  const character=model.createCharacter('Navegação preservada');character.resources.hp=6;character.notes='Diário preservado';
+  character.portrait={dataUrl:portraitPng(30,40),zoom:1.4,x:25,y:70};
+  const f=fixture({guest:character});await flush();
+  const snapshot=JSON.stringify(f.app.getState().records),writeCount=f.writes.length;
+  const fixed=['#identity','#resources','#character-list','#mobile-character-select','#navigation'];
+  const fixedWrites=fixed.map(selector=>f.elements.get(selector).innerHTMLWrites);
+  const portrait=f.document.querySelector('[data-action="portrait-edit"]'),resource=f.document.querySelectorAll('[data-resource-value]')[0];
+  const nav=f.document.querySelectorAll('#navigation [data-tab]'),content=f.elements.get('#sheet-content');
+  const contentWrites=content.innerHTMLWrites;
+  f.clickAction('',{tab:'equipment'});
+  assert.equal(f.app.getState().tab,'equipment');assert.equal(f.elements.get('#section-title').textContent,'Equipamento');
+  assert.equal(content.innerHTMLWrites,contentWrites+1);
+  assert.deepEqual(fixed.map(selector=>f.elements.get(selector).innerHTMLWrites),fixedWrites);
+  assert.equal(f.document.querySelector('[data-action="portrait-edit"]'),portrait);
+  assert.equal(f.document.querySelectorAll('[data-resource-value]')[0],resource);
+  assert.equal(f.document.querySelectorAll('#navigation [data-tab]')[0],nav[0]);
+  for(const button of nav){assert.equal(button.classList.contains('active'),button.dataset.tab==='equipment');assert.equal(button['aria-current'],button.dataset.tab==='equipment'?'page':undefined);}
+  assert.equal(f.document.activeElement,f.elements.get('#section-title'));
+  f.clickAction('',{tab:'equipment'});assert.equal(content.innerHTMLWrites,contentWrites+1,'selecting the active section does not replace its fields');
+  f.clickAction('',{tab:'combat'});
+  assert.equal(f.elements.get('#section-title').textContent,'Combate');assert.equal(content.innerHTMLWrites,contentWrites+2);
+  assert.deepEqual(fixed.map(selector=>f.elements.get(selector).innerHTMLWrites),fixedWrites);
+  assert.equal(f.writes.length,writeCount);assert.equal(JSON.stringify(f.app.getState().records),snapshot);
 });
 
 test('portrait adjustments remain a draft until saved and are discarded when the account changes',async()=>{

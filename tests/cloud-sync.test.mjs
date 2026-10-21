@@ -294,6 +294,21 @@ test('unchanged pulls and save acknowledgements do not rerender and snapshots ar
   assert.equal(device.engine.getSnapshot().records[0].notes, 'Local');
 });
 
+test('direct cache serialization retains the complete legacy payload and isolates stored and returned snapshots', async () => {
+  const original=character('hero','Retrato sintético');original.portrait={dataUrl:portraitPng(),zoom:1.8,x:20,y:75};
+  const backend=server([original]),device=client(backend);await device.engine.start();
+  const edited=device.engine.getSnapshot();edited.records[0].notes='Edição durável';
+  const returned=device.engine.setRecords(edited.records,edited.activeId);
+  const expected=JSON.stringify({version:1,...returned,rows:[{id:original.id,revision:1,deleted:false,base:original}]});
+  assert.equal(device.storage.getItem('account:user-1'),expected,'property order, acknowledged base, portrait, metadata, and pending edit retain the prior cache representation');
+  edited.records[0].notes='Origem alterada depois de salvar';returned.records[0].notes='Retorno alterado';returned.records[0].portrait.zoom=3;
+  assert.equal(device.storage.getItem('account:user-1'),expected,'the serialized cache is independent of caller-owned objects');
+  const isolated=device.engine.getSnapshot();
+  assert.equal(isolated.records[0].notes,'Edição durável');assert.equal(isolated.records[0].portrait.zoom,1.8);
+  isolated.records[0].portrait.x=99;
+  assert.equal(device.engine.getSnapshot().records[0].portrait.x,20);
+});
+
 test('stop ignores late list and save responses including callbacks and cache writes', async () => {
   const backend = server([character()]), listRelease = deferred(), device = client(backend);
   backend.adapter.list = () => listRelease.promise;

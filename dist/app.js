@@ -3,12 +3,12 @@ import { preparePrint } from './print.js?v=records-2';
 import { prepareExport } from './export-bundle.js?v=records-2';
 import { createCloudClient } from './cloud-client.js?v=records-2';
 import { cloudConfig } from './cloud-config.js';
-import { CloudSync } from './cloud-sync.js?v=records-2';
+import { CloudSync } from './cloud-sync.js?v=performance-1';
 import { isPristineCharacter, localMigrationCandidates, mergeLocalCharacters } from './cloud-ui-state.js?v=records-2';
 import { acquireAccountLock } from './account-lock.js';
-import { icon, setButtonLabel, mountButtonIcons } from './icons.js?v=portrait-ui-2';
+import { icon, setButtonLabel, mountButtonIcons } from './icons.js?v=performance-1';
 import { setupTheme } from './preferences.js?v=settings-1';
-import { setupThemeToggle } from './ui-shell.js?v=records-2';
+import { setupThemeToggle } from './ui-shell.js?v=performance-1';
 import { setupLanguage, getLanguage, t, languageSettingsMarkup, translateStatic } from './i18n.js';
 import { ui, bilingual, label as localLabel, formatError } from './i18n-character.js?v=ink-fields-1';
 import { importPortrait, portraitStyle } from './portrait.js';
@@ -38,6 +38,8 @@ let accountDialogActive = false, onboardingDialogActive = false, authEventRevisi
 let migrationSessionIds = new Set();
 let cloudEditError = '';
 let cloudAccountLock = null, cloudBlockedReason = '';
+let localSaveConfirmed = false;
+const appliedInputSaves = new WeakMap();
 try {
   const saved = localStorage.getItem(KEY);
   if (saved) {
@@ -59,8 +61,9 @@ function setAt(obj,path,value) {
   keys.slice(0,-1).forEach(k=>target=target[k]); target[keys.at(-1)] = value;
 }
 function save() {
+  localSaveConfirmed=false;
   if (cloudUser) {
-    if (!cloudReady || !cloudEngine) return;
+    if (!cloudReady || !cloudEngine) return false;
     try {
       const snapshot = cloudRecords();
       if (snapshot.length && cloudPlaceholderId) { records=snapshot;cloudPlaceholderId=null; }
@@ -69,21 +72,35 @@ function save() {
       cloudEngine.setRecords(snapshot, snapshot.some(c=>c.id===activeId) ? activeId : null);
       clearTimeout(cloudSyncTimer);
       cloudSyncTimer=setTimeout(syncCloud,700);
+      // setRecords persists synchronously. A queued network request is not a
+      // durable save when the account cache was unreadable or exceeded quota.
+      return localSaveConfirmed=cloudEngine.cacheWritable&&!cloudEngine.storageError;
     } catch {
       cloudEditError='Não foi possível guardar a edição · reduza a ficha ou exporte uma cópia';
       onCloudStatus({state:'error',pending:1,message:cloudEditError});
       toast(t('Não foi possível guardar a edição. Use Exportar para preservar esta ficha.'),true);
     }
-    return;
+    return false;
   }
-  if (saveError) { $('#save-status').textContent=t('Salvamento indisponível · exporte uma cópia'); return; }
+  if (saveError) { $('#save-status').textContent=t('Salvamento indisponível · exporte uma cópia'); return false; }
   try {
     localStorage.setItem(KEY, JSON.stringify({version:1, activeId,characters:records}));
     setSaveStatus(t('Salvo neste navegador'));
+    return localSaveConfirmed=true;
   } catch {
     $('#save-status').textContent=t('Não foi possível salvar · exporte uma cópia');
     toast(t('O navegador não conseguiu salvar. Use Exportar para guardar seus dados.'),true);
+    return false;
   }
+}
+function rememberInputSave(input,character,value,confirmed) {
+  appliedInputSaves.set(input,{character,path:input.dataset.field,value,generation:cloudGeneration,userId:cloudUser?.id||null,confirmed});
+}
+function inputSaveIsCurrent(input,character,value) {
+  const receipt=appliedInputSaves.get(input);
+  return Boolean(receipt?.confirmed&&localSaveConfirmed&&receipt.character===character&&receipt.path===input.dataset.field
+    &&receipt.value===value&&valueAt(character,input.dataset.field)===value&&receipt.generation===cloudGeneration&&receipt.userId===(cloudUser?.id||null)
+    &&(!cloudUser||cloudReady&&cloudEngine?.cacheWritable&&!cloudEngine.storageError));
 }
 function setSaveStatus(message, state='local') {
   const status=$('#save-status');
@@ -486,13 +503,29 @@ function watchFeaturesArea() {
 window.addEventListener('resize',()=>resizeFeaturesArea());
 document.fonts?.ready?.then(()=>resizeFeaturesArea());
 function renderContent() { $('#sheet-content').innerHTML=pages[tab]();mountButtonIcons($('#sheet-content'));watchFeaturesArea();syncExportButtons(); }
+function renderSectionHeading() {
+  const section=tabs.find(section=>section[0]===tab);
+  $('#section-title').textContent=t(section[1]);$('#section-description').textContent=t(section[3]);
+}
+function selectTab(nextTab) {
+  if(!tabs.some(section=>section[0]===nextTab))return;
+  if(nextTab!==tab){
+    tab=nextTab;
+    document.querySelectorAll('#navigation [data-tab]').forEach(button=>{
+      const active=button.dataset.tab===tab;button.classList.toggle('active',active);
+      if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
+    });
+    renderContent();renderSectionHeading();
+  }
+  $('#section-title').setAttribute('tabindex','-1');$('#section-title').focus({preventScroll:true});
+}
 function render() {
   const previous=document.activeElement;
   const focused=previous?.dataset.field;
   const selection=focused && ['text','search','url','tel','password'].includes(previous.type)||previous?.tagName==='TEXTAREA'
     ? {start:previous.selectionStart,end:previous.selectionEnd,direction:previous.selectionDirection,scroll:previous.scrollTop}:null;
   renderSidebar(); renderIdentity(); renderResources(); renderContent();
-  const i=tabs.findIndex(t=>t[0]===tab); $('#section-title').textContent=t(tabs[i][1]); $('#section-description').textContent=t(tabs[i][3]);
+  renderSectionHeading();
   if (focused) {
     const next=document.querySelector(ui`[data-field="${CSS.escape(focused)}"]`);next?.focus({preventScroll:true});
     if (selection && next?.setSelectionRange) {next.setSelectionRange(selection.start,selection.end,selection.direction);next.scrollTop=selection.scroll;}
@@ -594,7 +627,8 @@ document.addEventListener('input',e=>{
   }
   if (!el.matches('[data-field]'))return;
   const val=el.type==='checkbox'?el.checked:el.type==='number'?numericValue(el):el.value;
-  setAt(current(),el.dataset.field,val); save();
+  const character=current();setAt(character,el.dataset.field,val);
+  rememberInputSave(el,character,val,save());
   if(el.dataset.field.startsWith('resources.'))syncResourceControls(el);
   if (el.dataset.field==='features'&&el.closest?.('.features-panel')) resizeFeaturesArea(el);
   if(el.dataset.field==='name'||el.dataset.field==='calling'){ renderSidebar();$('#breadcrumb-name').textContent=current().name||t('Novo personagem'); }
@@ -605,16 +639,25 @@ document.addEventListener('change',e=>{
   if(el.dataset.skill){ c.trained=el.checked?[...new Set([...c.trained,el.dataset.skill])]:c.trained.filter(k=>k!==el.dataset.skill);save();render(); }
   else if(el.dataset.key){ c.keyAttribute=el.dataset.key;save();render(); }
   else if(el.matches('[data-field]')&&(el.type==='number'||el.type==='checkbox'||el.tagName==='SELECT')){
-    if(el.tagName==='SELECT'){setAt(c,el.dataset.field,el.value);if(/^deeds\.\d+\.kind$/.test(el.dataset.field)){const i=Number(el.dataset.field.split('.')[1]);c.deeds[i].cost=el.value==='heavy'?2:el.value==='mighty'?4:0;}}
-    if(el.dataset.field.startsWith('resources.')){save();syncResourceControls();return;}
-    save();render();
+    if(el.tagName==='SELECT'){
+      setAt(c,el.dataset.field,el.value);
+      if(/^deeds\.\d+\.kind$/.test(el.dataset.field)){const i=Number(el.dataset.field.split('.')[1]);c.deeds[i].cost=el.value==='heavy'?2:el.value==='mighty'?4:0;}
+      save();
+    } else {
+      const value=el.type==='checkbox'?el.checked:numericValue(el);
+      if(!inputSaveIsCurrent(el,c,value)){
+        setAt(c,el.dataset.field,value);rememberInputSave(el,c,value,save());
+      }
+    }
+    if(el.dataset.field.startsWith('resources.')){syncResourceControls();return;}
+    render();
   }
 });
 document.addEventListener('click',e=>{
   const el=e.target.closest('button'); if(!el)return;
   const c=current(),d=derive(c);
   if(el.dataset.resourceHelp){showResourceHelp(el.dataset.resourceHelp);return;}
-  if(el.dataset.tab){ tab=el.dataset.tab;render();$('#section-title').setAttribute('tabindex','-1');$('#section-title').focus({preventScroll:true});return; }
+  if(el.dataset.tab){selectTab(el.dataset.tab);return;}
   if(el.dataset.character){activeId=el.dataset.character;save();render();document.querySelector('[data-field="name"]')?.focus({preventScroll:true});return;}
   if(el.dataset.resource){const k=el.dataset.resource;if(!allResourceKeys.includes(k)||d.commoner&&k!=='hp')return;const max=resourceLimit(k,d)??1000000000;c.resources[k]=Math.max(0,Math.min(max,c.resources[k]+Number(el.dataset.delta)));save();syncResourceControls();return;}
   if(el.dataset.alignment){const[i,k,n]=el.dataset.alignment.split('.');c.alignments[i][k]=c.alignments[i][k]===Number(n)?Number(n)-1:Number(n);save();renderContent();return;}

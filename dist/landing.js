@@ -1,6 +1,6 @@
-import { mountButtonIcons } from './icons.js?v=records-2';
+import { mountButtonIcons } from './icons.js?v=performance-1';
 import { consumeHavenReturn } from './auth-return.js';
-import { createPageTransition } from './ui-shell.js?v=records-2';
+import { createPageTransition } from './ui-shell.js?v=performance-1';
 import { setupLandingArt } from './landing-art.js?v=panorama-1';
 import { setupLanguage, t, registerMessages } from './i18n.js';
 

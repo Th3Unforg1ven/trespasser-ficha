@@ -173,7 +173,9 @@ export class CloudSync {
     if (!this.running || !this.cacheWritable) return;
     try {
       if (!this.storage || typeof this.storage.setItem !== 'function') throw new Error('Armazenamento local indisponível.');
-      this.storage.setItem(this.cacheKey, JSON.stringify({ version: CACHE_VERSION, ...this.getSnapshot(), rows: [...this.rows.values()] }));
+      // JSON.stringify creates the durable, independent snapshot directly;
+      // cloning through getSnapshot first would serialize the records twice.
+      this.storage.setItem(this.cacheKey, JSON.stringify({ version: CACHE_VERSION, records: this.records, activeId: this.activeId, rows: [...this.rows.values()] }));
       this.storageError = '';
     } catch {
       this.storageError = 'Não foi possível salvar a cópia neste navegador. Mantenha a página aberta até a sincronização terminar ou exporte a ficha.';

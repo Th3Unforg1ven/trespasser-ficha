@@ -1,12 +1,12 @@
 import { createHaven, normalizeHaven, deriveHaven, HAVEN_ATTRS, HAVEN_SKILLS, HAVEN_LEVELS, HIRELING_TYPES } from './haven-model.js';
 import { createCloudClient } from './cloud-client.js?v=records-2';
 import { cloudConfig } from './cloud-config.js';
-import { CloudSync } from './cloud-sync.js?v=records-2';
+import { CloudSync } from './cloud-sync.js?v=performance-1';
 import { acquireAccountLock } from './account-lock.js';
 import { setupTheme } from './preferences.js?v=settings-1';
-import { icon, mountButtonIcons } from './icons.js?v=records-2';
+import { icon, mountButtonIcons } from './icons.js?v=performance-1';
 import { preparePrint } from './print.js?v=records-2';
-import { setupThemeToggle, createPageTransition } from './ui-shell.js?v=records-2';
+import { setupThemeToggle, createPageTransition } from './ui-shell.js?v=performance-1';
 import { setupLanguage, t, getLanguage, languageSettingsMarkup, translateStatic } from './i18n.js';
 import './i18n-havens.js';
 
@@ -323,14 +323,29 @@ export function setupHavenPage({document,window,localStorage,sessionStorage,navi
   }
   function notesPage() {return panel(t('Anotações do refúgio'),'Haven notes',`${area('Diário & decisões da mesa <small>Journal & rulings</small>','notes',18)}<p class="panel-note">${t('Registre aqui acontecimentos, exceções e efeitos dos edifícios. O registro não aplica ciclos semanais nem muda a população, os relógios, o nível ou a riqueza sozinho.')}</p>`);}
   const pages={refuge:refugePage,construction:constructionPage,economy:economyPage,notes:notesPage};
+  function renderContent() {
+    const content=$('#haven-content');
+    content.innerHTML=pages[tab]();mountButtonIcons(content);
+  }
+  function selectTab(next) {
+    if(next===tab||!Object.hasOwn(pages,next))return;
+    tab=next;
+    $('#navigation').querySelectorAll('[data-tab]').forEach(button=>{
+      const active=button.dataset.tab===tab;
+      button.classList.toggle('active',active);
+      if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
+    });
+    renderContent();
+  }
   function render() {
-    const focused=document.activeElement,path=focused?.dataset.field;
+    const focused=document.activeElement,path=focused?.dataset.field,focusedTab=focused?.dataset.tab;
     const selection=path&&(focused.tagName==='TEXTAREA'||focused.type==='text')?{start:focused.selectionStart,end:focused.selectionEnd,scroll:focused.scrollTop}:null;
     const picker=$('#haven-select');picker.innerHTML=state.records.map(item=>`<option value="${esc(item.id)}" ${item.id===state.activeId?'selected':''}>${esc(item.name||t('Novo refúgio'))}</option>`).join('');
     renderIdentity();renderMetrics();
     $('#navigation').innerHTML=TABS.map(([key,label,symbol])=>`<button type="button" class="nav-item ${tab===key?'active':''}" data-tab="${key}" ${tab===key?'aria-current="page"':''}>${icon(symbol,'nav-icon')}<span>${t(label)}</span></button>`).join('');
-    $('#haven-content').innerHTML=pages[tab]();mountButtonIcons(document);refreshStatus();
+    renderContent();refreshStatus();
     if(path){const next=document.querySelector(`[data-field="${CSS.escape(path)}"]`);next?.focus({preventScroll:true});if(selection&&next?.setSelectionRange){next.setSelectionRange(selection.start,selection.end);next.scrollTop=selection.scroll;}}
+    else if(focusedTab)$('#navigation').querySelector(`[data-tab="${focusedTab}"]`)?.focus({preventScroll:true});
   }
   function refreshComputed() {
     const haven=current(),d=deriveHaven(haven);
@@ -417,7 +432,7 @@ export function setupHavenPage({document,window,localStorage,sessionStorage,navi
   });
   document.addEventListener('click',event=>{
     const button=event.target.closest?.('[data-action],[data-tab]');if(!button||button.disabled)return;
-    if(button.dataset.tab){tab=button.dataset.tab;render();return;}
+    if(button.dataset.tab){selectTab(button.dataset.tab);return;}
     const {action,list,rowId}=button.dataset;
     if(action==='theme'){theme.setPreference(button.dataset.themeValue);refreshSettings();}
     if(action==='login')void controller.login();
@@ -466,7 +481,7 @@ export function setupHavenPage({document,window,localStorage,sessionStorage,navi
   window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();});
   window.addEventListener('beforeprint',()=>{cleanupPrint=preparePrint($('#main'));});
   window.addEventListener('afterprint',()=>{cleanupPrint?.();cleanupPrint=null;});
-  render();void controller.initialize();
+  mountButtonIcons(document);render();void controller.initialize();
   return {controller,render,openSettings};
 }
 

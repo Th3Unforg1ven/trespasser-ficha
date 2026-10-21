@@ -1,4 +1,4 @@
-import {setButtonLabel,icon} from './icons.js?v=records-2';
+import {setButtonLabel,icon} from './icons.js?v=performance-1';
 import {t,registerMessages} from './i18n.js';
 
 registerMessages({'Abrindo…':'Opening…','Abrindo seu registro…':'Opening your record…'});
