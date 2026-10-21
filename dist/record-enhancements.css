@@ -54,7 +54,7 @@
 
 .plights-fieldset{min-width:0;margin:0;padding:0;border:0}
 .plights-fieldset>legend{padding:0;margin-bottom:10px;font-size:11px;font-weight:700}
-.plights-fieldset>legend small{font-size:9px;font-weight:400}
+.plights-fieldset>legend small{display:block;margin-top:3px;font-size:9px;font-weight:400}
 .plights-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px;border-top:1px solid var(--line,#777)}
 .plight-choice{display:flex;align-items:flex-start;gap:8px;min-width:0;min-height:44px;padding:10px 0;border-bottom:1px solid var(--line,#aaa);cursor:pointer}
 .plight-choice input[type="checkbox"]{margin-top:2px;flex:0 0 17px;min-width:17px;width:17px;height:17px}
