@@ -17,7 +17,7 @@
   }
   .character-sheet-grid>.attribute-panel {grid-area:attributes;border-right:4px solid var(--character-rule,#111)}
   .character-sheet-grid>.advancement-panel {grid-area:advancement;border-right:4px solid var(--character-rule,#111)}
-  .character-sheet-grid>.alignment-panel {grid-area:alignment}
+  .character-sheet-grid>.alignment-panel {grid-area:alignment;container:character-alignment / inline-size}
   .character-sheet-grid>.health-panel {grid-area:health;container:character-health / inline-size}
   .character-sheet-grid>.features-panel {grid-area:features;border-bottom:0}
   .character-sheet-grid>.panel::before {width:8px;height:8px}
@@ -86,6 +86,12 @@
     :is(.health-panel,.combat-health-panel) .plights-grid {grid-template-columns:repeat(2,minmax(0,1fr))}
     :is(.health-panel,.combat-health-panel) .injuries {grid-template-columns:1fr;gap:12px}
     :is(.health-panel,.combat-health-panel) .injuries>div {grid-template-columns:minmax(0,1fr) 58px}
+  }
+  @container character-alignment (max-width:270px) {
+    .resource-strip-alignment .resource {display:flex;flex-direction:column}
+    .resource-strip-alignment .resource-help {justify-content:center;text-align:center}
+    .resource-strip-alignment .resource-control {width:100%;max-width:180px;align-self:center;margin-top:6px}
+    .resource-strip-alignment .resource-track {width:100%}
   }
   @media (min-width:1500px) {
     .character-sheet-grid>.panel {padding:21px}
