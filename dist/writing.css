@@ -25,7 +25,6 @@
   letter-spacing:0;
   text-transform:none;
 }
-:is(.workspace,#utility-dialog,#print-document) :is(input:not([type]),input[type="text"],input[type="search"],input[type="url"],input[type="email"],input[type="tel"],select) {min-height:36px}
 :is(.workspace,#utility-dialog,#print-document) :is(input[type="number"],select[data-field="level"]) {
   font-family:var(--record-writing-font);
   font-style:normal;
@@ -39,7 +38,6 @@
 @media screen and (max-width:600px) {
   :is(.workspace,#utility-dialog) :is(input:not([type]),input[type="text"],input[type="search"],input[type="url"],input[type="email"],input[type="tel"],textarea,select) {font-size:17px}
   :is(.workspace,#utility-dialog) :is(.identity-name input,.haven-identity>.field>input) {font-size:21px;min-height:39px}
-  .workspace .mobile-character-choice select {font-size:16px}
 }
 @media print {
   :is(.workspace,#utility-dialog,#print-document) :is(input:not([type]),input[type="text"],textarea,select) {font-size:11pt}
